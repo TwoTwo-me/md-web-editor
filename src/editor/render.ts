@@ -1,0 +1,205 @@
+import DOMPurify from "dompurify";
+import type { NoteLink } from "../core/types";
+import { decoded, directory, indexDocument, markdownHtml, safePath, wikiParts } from "./markdown";
+
+type RenderOptions = {
+  readonly source: string;
+  readonly root: HTMLElement;
+  readonly asset: (target: string) => Promise<Blob | undefined>;
+  readonly onLink: (target: string, kind?: NoteLink["kind"]) => void;
+};
+
+const resources = new Set([
+  "src",
+  "srcset",
+  "poster",
+  "background",
+  "action",
+  "formaction",
+  "ping",
+  "cite",
+  "xlink:href",
+]);
+const forbidden = [
+  "base",
+  "button",
+  "embed",
+  "form",
+  "frame",
+  "iframe",
+  "input",
+  "math",
+  "object",
+  "script",
+  "source",
+  "style",
+  "svg",
+  "track",
+  "video",
+  "audio",
+];
+
+function sanitize(): void {
+  DOMPurify.removeAllHooks();
+  DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
+    const name = data.attrName.toLocaleLowerCase();
+    if (name === "href") {
+      if (!/^(?:\/\/|javascript:|data:|file:)/iu.test(data.attrValue)) {
+        node.setAttribute("data-md-href", data.attrValue);
+      }
+      data.keepAttr = false;
+      return;
+    }
+    if (name.startsWith("on") || name === "style" || resources.has(name)) {
+      if (name === "src") node.setAttribute("data-md-src", data.attrValue);
+      data.keepAttr = false;
+    }
+  });
+}
+
+function validRaster(blob: Blob): Promise<boolean> {
+  return blob
+    .slice(0, 16)
+    .arrayBuffer()
+    .then((buffer) => {
+      const bytes = new Uint8Array(buffer);
+      const png = bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71;
+      const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+      const gif = bytes[0] === 71 && bytes[1] === 73 && bytes[2] === 70 && bytes[3] === 56;
+      const webp =
+        bytes[0] === 82 &&
+        bytes[1] === 73 &&
+        bytes[2] === 70 &&
+        bytes[3] === 70 &&
+        bytes[8] === 87 &&
+        bytes[9] === 69 &&
+        bytes[10] === 66 &&
+        bytes[11] === 80;
+      const avif =
+        bytes[4] === 102 &&
+        bytes[5] === 116 &&
+        bytes[6] === 121 &&
+        bytes[7] === 112 &&
+        bytes[8] === 97;
+      return (
+        blob.size <= 20 * 1024 * 1024 &&
+        ((png && blob.type === "image/png") ||
+          (jpeg && blob.type === "image/jpeg") ||
+          (gif && blob.type === "image/gif") ||
+          (webp && blob.type === "image/webp") ||
+          (avif && blob.type === "image/avif"))
+      );
+    });
+}
+
+function taskMarkup(html: string): string {
+  return html.replace(
+    /<li>\s*\[([ xX])\]\s+/gu,
+    (_all, checked: string) =>
+      `<li class="task-list-item"><span class="task-checkbox" role="checkbox" aria-checked="${checked !== " "}"></span>`,
+  );
+}
+
+function wikiNodes(root: HTMLElement): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  for (let current = walker.nextNode(); current; current = walker.nextNode())
+    if (current instanceof Text && !current.parentElement?.closest("a, code, pre"))
+      nodes.push(current);
+  for (const node of nodes) {
+    if (!/!?\[\[[^\]\n]+\]\]/u.test(node.data)) continue;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    for (const match of node.data.matchAll(/(!)?\[\[([^\]\n]+)\]\]/gu)) {
+      const index = match.index ?? 0;
+      fragment.append(node.data.slice(cursor, index));
+      const parts = wikiParts(match[2] ?? "");
+      const item = document.createElement(match[1] ? "img" : "a");
+      if (item instanceof HTMLImageElement) {
+        item.alt = parts.label;
+        item.setAttribute("data-md-src", parts.target);
+      } else {
+        item.textContent = parts.label;
+        item.setAttribute("data-md-href", parts.target);
+        item.setAttribute("data-md-kind", "wiki");
+      }
+      fragment.append(item);
+      cursor = index + (match[0]?.length ?? 0);
+    }
+    fragment.append(node.data.slice(cursor));
+    node.replaceWith(fragment);
+  }
+}
+
+export function renderMarkdown(content: string, options: RenderOptions): () => void {
+  sanitize();
+  options.root.replaceChildren();
+  options.root.className = "markdown-reading";
+  options.root.innerHTML = DOMPurify.sanitize(taskMarkup(markdownHtml(content)), {
+    ADD_ATTR: ["data-md-href", "data-md-src", "class", "role", "aria-checked"],
+    FORBID_TAGS: forbidden,
+    FORBID_ATTR: ["style", "ping", "target"],
+  });
+  wikiNodes(options.root);
+  for (const link of options.root.querySelectorAll<HTMLElement>("[data-md-href]")) {
+    link.tabIndex = 0;
+    link.setAttribute("role", "link");
+  }
+  const headings = indexDocument(content).headings;
+  options.root.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6").forEach((heading, index) => {
+    const metadata = headings[index];
+    if (!metadata) return;
+    heading.id = metadata.id;
+    heading.setAttribute("data-source-line", String(metadata.line));
+  });
+  const urls = new Set<string>();
+  let disposed = false;
+  const onClick = (event: MouseEvent): void => {
+    const link =
+      event.target instanceof Element ? event.target.closest<HTMLElement>("[data-md-href]") : null;
+    const target = link?.getAttribute("data-md-href");
+    if (target) {
+      event.preventDefault();
+      options.onLink(target, link?.getAttribute("data-md-kind") === "wiki" ? "wiki" : "markdown");
+    }
+  };
+  options.root.addEventListener("click", onClick);
+  const onKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const link =
+      event.target instanceof Element ? event.target.closest<HTMLElement>("[data-md-href]") : null;
+    const target = link?.getAttribute("data-md-href");
+    if (!target) return;
+    event.preventDefault();
+    options.onLink(target, link?.getAttribute("data-md-kind") === "wiki" ? "wiki" : "markdown");
+  };
+  options.root.addEventListener("keydown", onKeydown);
+  for (const image of options.root.querySelectorAll<HTMLImageElement>("img[data-md-src]")) {
+    const target = image.getAttribute("data-md-src");
+    const path =
+      target && !/^(?:\/\/|[a-z][a-z\d+.-]*:)/iu.test(target)
+        ? safePath(`${directory(options.source)}${decoded(target) ?? ".."}`)
+        : undefined;
+    if (!path) {
+      image.replaceWith(document.createTextNode(image.alt));
+      continue;
+    }
+    void options
+      .asset(target ?? path)
+      .then((blob) => blob && validRaster(blob).then((valid) => ({ blob, valid })))
+      .then((result) => {
+        if (result?.valid && image.isConnected && !disposed) {
+          const url = URL.createObjectURL(result.blob);
+          urls.add(url);
+          image.src = url;
+        }
+      })
+      .catch(() => image.replaceWith(document.createTextNode(image.alt)));
+  }
+  return () => {
+    disposed = true;
+    options.root.removeEventListener("click", onClick);
+    options.root.removeEventListener("keydown", onKeydown);
+    for (const url of urls) URL.revokeObjectURL(url);
+  };
+}
