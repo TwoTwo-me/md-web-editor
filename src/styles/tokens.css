@@ -1,0 +1,256 @@
+:root {
+  color-scheme: dark;
+  --bg: #19191c;
+  --panel: #202024;
+  --rail: #17171a;
+  --elevated: #29292f;
+  --hover: #2e2e35;
+  --border: #35353e;
+  --text: #e4e4eb;
+  --muted: #a1a1b0;
+  --accent: #b5a0ff;
+  --accent-soft: #322a48;
+  --success: #98ceae;
+  --warning: #e8bc78;
+  --danger: #f39a9a;
+  --graph-edge: #555363;
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s8: 32px;
+  --s12: 48px;
+  --font-xs: 11px;
+  --font-sm: 12px;
+  --font-ui: 14px;
+  --font-body: 16px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --motion-fast: 140ms;
+  --motion-normal: 200ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --editor-width: 740px;
+  --editor-font-size: 16px;
+  --left-width: 244px;
+  --right-width: 264px;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --panel: #f5f5f7;
+  --rail: #ededf0;
+  --elevated: #ffffff;
+  --hover: #e8e8ed;
+  --border: #dcdce3;
+  --text: #292930;
+  --muted: #656574;
+  --accent: #7151c7;
+  --accent-soft: #eee8fb;
+  --success: #36734d;
+  --warning: #855500;
+  --danger: #ad3030;
+  --graph-edge: #bab6c8;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font: var(--font-ui) / 1.5 var(--font-sans);
+  color: var(--text);
+  background: var(--bg);
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+a {
+  color: var(--accent);
+}
+button,
+input,
+select,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+[hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: HTML hidden must override component display. */
+  display: none !important;
+}
+button,
+input,
+select {
+  color: var(--text);
+}
+button {
+  border: 0;
+}
+input,
+select {
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--s2) var(--s3);
+}
+input[type="range"] {
+  padding: 0;
+  accent-color: var(--accent);
+}
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+.muted {
+  color: var(--muted);
+}
+.error-text {
+  color: var(--danger);
+}
+.field {
+  display: grid;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+.field-label {
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+.button {
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--elevated);
+  transition: background var(--motion-fast);
+}
+.button:hover {
+  background: var(--hover);
+}
+.button.primary {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.button.subtle {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.icon-button {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  transition:
+    background var(--motion-fast),
+    color var(--motion-fast);
+}
+.icon-button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.icon-button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.glyph {
+  font-size: 19px;
+  font-family: var(--font-sans);
+  line-height: 1;
+}
+kbd {
+  font: var(--font-xs) / 1.5 var(--font-mono);
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+  color: var(--muted);
+}
+.dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: 85dvh;
+  background: var(--elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0;
+  box-shadow: 0 16px 60px rgb(0 0 0 / 0.24);
+  animation: dialog-in var(--motion-fast) var(--ease);
+}
+.dialog::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid var(--border);
+}
+.dialog-header h2 {
+  font-size: 16px;
+  margin: 0;
+}
+.dialog-body {
+  padding: var(--s5);
+  overflow: auto;
+}
+.dialog-body > p:first-child {
+  margin-top: 0;
+}
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s5);
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: User reduced-motion preference overrides every animation. */
+    animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Respect reduced motion above component transitions. */
+    transition: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Prevent scroll motion when users request reduction. */
+    scroll-behavior: auto !important;
+  }
+}
+@media (pointer: coarse) {
+  .icon-button {
+    width: 40px;
+    height: 40px;
+  }
+}

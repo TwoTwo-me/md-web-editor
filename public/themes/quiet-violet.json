@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "name": "Quiet Violet",
+  "dark": {
+    "bg": "#19191c",
+    "panel": "#202024",
+    "rail": "#17171a",
+    "elevated": "#29292f",
+    "hover": "#2e2e35",
+    "border": "#35353e",
+    "text": "#e4e4eb",
+    "muted": "#a1a1b0",
+    "accent": "#b5a0ff",
+    "accentSoft": "#322a48",
+    "success": "#98ceae",
+    "warning": "#e8bc78",
+    "danger": "#f39a9a",
+    "graphEdge": "#555363"
+  },
+  "light": {
+    "bg": "#ffffff",
+    "panel": "#f5f5f7",
+    "rail": "#ededf0",
+    "elevated": "#ffffff",
+    "hover": "#e8e8ed",
+    "border": "#dcdce3",
+    "text": "#292930",
+    "muted": "#656574",
+    "accent": "#7151c7",
+    "accentSoft": "#eee8fb",
+    "success": "#36734d",
+    "warning": "#855500",
+    "danger": "#ad3030",
+    "graphEdge": "#bab6c8"
+  }
+}
