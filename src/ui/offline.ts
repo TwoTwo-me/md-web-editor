@@ -4,7 +4,8 @@ export function enableOffline(app: Workspace): void {
   if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
   const offer = (registration: ServiceWorkerRegistration) => {
     const worker = registration.waiting;
-    if (!worker || document.querySelector(".update-banner")) return;
+    if (!navigator.serviceWorker.controller || !worker || document.querySelector(".update-banner"))
+      return;
     const banner = element("div", "notice update-banner");
     banner.append(
       element("span", "", "새 버전이 준비되었습니다. "),
