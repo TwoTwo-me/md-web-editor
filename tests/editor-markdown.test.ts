@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { indexDocument, resolveLink } from "../src/editor/markdown";
+import { indexDocument, markdownContext, resolveLink } from "../src/editor/markdown";
 
 describe("Markdown document indexing", () => {
   it("indexes supported links and headings while excluding fenced code", () => {
@@ -52,5 +52,14 @@ describe("vault link resolution", () => {
       kind: "external",
       url: "https://tracker.invalid/",
     });
+  });
+});
+
+describe("Markdown parser context", () => {
+  it("records parsed indented footnotes and excludes fenced lookalikes", () => {
+    const content = "note[^1]\n\n   [^1]: definition\n\n```md\n[^2]: fake\n```";
+    const context = markdownContext(content);
+    expect(context.footnotes.get("1")).toBe(content.indexOf("[^1]: definition"));
+    expect(context.footnotes.has("2")).toBe(false);
   });
 });

@@ -129,6 +129,64 @@ describe("CodeMirror editor modes", () => {
     editor.destroy();
   });
 
+  it("maps a continuation-line task to its exact source marker", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "# Active\n\n-\n  [ ] continuation task",
+      readonly: false,
+      mode: "live",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    parent.querySelector<HTMLElement>(".task-checkbox")?.click();
+    expect(editor.getContent()).toContain("  [x] continuation task");
+    editor.destroy();
+  });
+
+  it("maps a multiline task whose parsed inline text strips continuation indentation", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "# Active\n\n- [ ] task\n  continuation text",
+      readonly: false,
+      mode: "live",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    parent.querySelector<HTMLElement>(".task-checkbox")?.click();
+    expect(editor.getContent()).toContain("- [x] task\n  continuation text");
+    editor.destroy();
+  });
+
+  it("retains inactive preview widgets while selection stays in one block", () => {
+    const parent = document.createElement("main");
+    let assetCalls = 0;
+    const editor = createEditor({
+      parent,
+      content: "active\ncontinued\n\n![image](asset.png)",
+      readonly: false,
+      mode: "live",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => {
+        assetCalls += 1;
+        return undefined;
+      },
+      completions: () => [],
+    });
+    editor.goToLine(2);
+    expect(assetCalls).toBe(1);
+    editor.destroy();
+  });
+
   it("returns a plain rendered block to source editing on pointer selection", () => {
     const parent = document.createElement("main");
     const editor = createEditor({
@@ -174,11 +232,11 @@ describe("CodeMirror editor modes", () => {
     editor.destroy();
   });
 
-  it("opens a live footnote definition in exact source", () => {
+  it("opens an indented live footnote definition at its source marker", () => {
     const parent = document.createElement("main");
     const editor = createEditor({
       parent,
-      content: "# Active\n\nfootnote[^1]\n\n[^1]: definition",
+      content: "# Active\n\nfootnote[^1]\n\n   [^1]: definition",
       readonly: false,
       mode: "live",
       path: "note.md",

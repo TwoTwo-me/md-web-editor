@@ -11,6 +11,7 @@ type LiveOptions = {
   readonly writable: () => boolean;
 };
 type Block = { readonly from: number; readonly to: number };
+type LiveState = { readonly decorations: DecorationSet; readonly active: string };
 
 function blocks(state: EditorState): readonly Block[] {
   const cursor = (ensureSyntaxTree(state, state.doc.length, 20) ?? syntaxTree(state)).cursor();
@@ -119,8 +120,16 @@ class PreviewWidget extends WidgetType {
   }
 }
 
-function decorations(state: EditorState, options: LiveOptions): DecorationSet {
-  const context = markdownContext(state.doc.toString());
+function activeBlock(state: EditorState): string {
+  const block = blocks(state).find((item) => selected(state, item));
+  return block ? `${block.from}:${block.to}` : "";
+}
+
+function decorations(
+  state: EditorState,
+  options: LiveOptions,
+  context: MarkdownContext,
+): DecorationSet {
   const ranges = blocks(state)
     .filter((block) => !selected(state, block))
     .map((block) =>
@@ -138,14 +147,31 @@ function decorations(state: EditorState, options: LiveOptions): DecorationSet {
 }
 
 export function livePreview(options: LiveOptions) {
-  const field = StateField.define<DecorationSet>({
+  let document: EditorState["doc"] | undefined;
+  let context: MarkdownContext | undefined;
+  const cachedContext = (state: EditorState): MarkdownContext => {
+    if (state.doc !== document || !context) {
+      document = state.doc;
+      context = markdownContext(state.doc.toString());
+    }
+    return context;
+  };
+  const field = StateField.define<LiveState>({
     create(state) {
-      return decorations(state, options);
+      return {
+        decorations: decorations(state, options, cachedContext(state)),
+        active: activeBlock(state),
+      };
     },
     update(_value, transaction) {
-      return decorations(transaction.state, options);
+      const active = activeBlock(transaction.state);
+      if (!transaction.docChanged && active === _value.active) return _value;
+      return {
+        decorations: decorations(transaction.state, options, cachedContext(transaction.state)),
+        active,
+      };
     },
-    provide: (value) => EditorView.decorations.from(value),
+    provide: (value) => EditorView.decorations.from(value, (state) => state.decorations),
   });
   return field;
 }

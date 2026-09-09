@@ -19,11 +19,20 @@ export type MarkdownContext = {
 
 export function markdownContext(content: string): MarkdownContext {
   const parsed: Env = {};
-  md.parse(content, parsed);
+  const tokens = md.parse(content, parsed);
   const environment: Env = parsed.references ? { references: parsed.references } : {};
   const footnotes = new Map<string, number>();
-  for (const match of content.matchAll(/^\[\^([^\]\n]+)\]:/gmu)) {
-    footnotes.set(match[1] ?? "", match.index ?? 0);
+  let label: string | undefined;
+  for (const token of tokens) {
+    if (token.type === "footnote_open") label = footnoteLabel(token.meta);
+    if (label && !footnotes.has(label) && token.type === "paragraph_open" && token.map) {
+      const start = lineStarts(content)[token.map[0] ?? -1];
+      const end = start === undefined ? -1 : content.indexOf("\n", start);
+      const line = start === undefined ? "" : content.slice(start, end < 0 ? content.length : end);
+      const marker = line.indexOf(`[^${label}]:`);
+      if (start !== undefined && marker >= 0) footnotes.set(label, start + marker);
+    }
+    if (token.type === "footnote_close") label = undefined;
   }
   return { environment, footnotes };
 }
@@ -33,20 +42,31 @@ export const markdownHtml = (content: string, environment?: Env): string =>
 
 export function taskOffsets(content: string): readonly number[] {
   const offsets: number[] = [];
-  const starts = [0];
-  for (const match of content.matchAll(/\n/gu)) starts.push((match.index ?? 0) + 1);
+  const starts = lineStarts(content);
+  let listDepth = 0;
   for (const token of md.parse(content, {})) {
-    if (token.type !== "list_item_open" || token.map === null) continue;
-    const line = token.map[0];
-    if (line === undefined) continue;
-    const start = starts[line];
-    if (start === undefined) continue;
-    const end = content.indexOf("\n", start);
-    const text = content.slice(start, end < 0 ? content.length : end);
-    const marker = /^(?:[ \t]*>\s*)*[ \t]*(?:[-+*]|\d+[.)])[ \t]+\[([ xX])\]/u.exec(text);
-    if (marker) offsets.push(start + (marker[0]?.lastIndexOf("[") ?? 0) + 1);
+    if (token.type === "list_item_open") listDepth += 1;
+    if (token.type === "inline" && listDepth && token.map && /^\[[ xX]\]/u.test(token.content)) {
+      const start = starts[token.map[0] ?? -1];
+      const end = starts[token.map[1] ?? -1] ?? content.length;
+      if (start === undefined) continue;
+      const firstLine = token.content.split("\n", 1)[0] ?? "";
+      const offset = content.slice(start, end).indexOf(firstLine);
+      if (offset >= 0) offsets.push(start + offset + 1);
+    }
+    if (token.type === "list_item_close") listDepth -= 1;
   }
   return offsets;
+}
+
+function lineStarts(content: string): readonly number[] {
+  return [0, ...[...content.matchAll(/\n/gu)].map((match) => (match.index ?? 0) + 1)];
+}
+
+function footnoteLabel(meta: unknown): string | undefined {
+  if (typeof meta !== "object" || meta === null || !("label" in meta)) return undefined;
+  const label = meta.label;
+  return typeof label === "string" ? label : undefined;
 }
 
 function slug(text: string, counts: Map<string, number>): string {
