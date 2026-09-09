@@ -1,4 +1,12 @@
 import { makeIcon } from "./icons";
+export function appendNotice(notice: HTMLElement): void {
+  let stack = document.querySelector<HTMLElement>(".notice-stack");
+  if (!stack) {
+    stack = element("div", "notice-stack");
+    document.body.append(stack);
+  }
+  stack.append(notice);
+}
 export function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className = "",

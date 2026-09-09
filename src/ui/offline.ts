@@ -1,5 +1,5 @@
 import type { Workspace } from "../core/workspace";
-import { button, element } from "./dom";
+import { appendNotice, button, element } from "./dom";
 export function enableOffline(app: Workspace): void {
   if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
   const offer = (registration: ServiceWorkerRegistration) => {
@@ -20,7 +20,7 @@ export function enableOffline(app: Workspace): void {
       ),
     );
     banner.setAttribute("role", "status");
-    document.body.append(banner);
+    appendNotice(banner);
   };
   void navigator.serviceWorker
     .register(`${import.meta.env.BASE_URL}sw.js`)

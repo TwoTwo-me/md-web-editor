@@ -1,5 +1,5 @@
 import { createGraph, type GraphView } from "../graph/graph";
-import { button, element } from "../ui/dom";
+import { appendNotice, button, element } from "../ui/dom";
 import type { Shell } from "../ui/shell";
 import { renderWorkspace } from "../ui/workspace-view";
 import { buildGraph } from "./graph-data";
@@ -47,7 +47,7 @@ export class Workspace {
     clearTimeout(this.noticeTimer);
     const notice = element("div", "notice", text);
     notice.setAttribute("role", "status");
-    document.body.append(notice);
+    appendNotice(notice);
     this.noticeTimer = setTimeout(() => notice.remove(), 6500);
   }
   async canLeave(): Promise<boolean> {

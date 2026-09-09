@@ -456,18 +456,28 @@
   padding: var(--s4);
   line-height: 1.7;
 }
-.notice {
+.notice-stack {
   position: fixed;
   bottom: 42px;
   left: 50%;
   transform: translateX(-50%);
   max-width: min(560px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  align-items: center;
+  z-index: 30;
+  pointer-events: none;
+}
+.notice {
+  pointer-events: auto;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   background: var(--elevated);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--s3) var(--s4);
-  z-index: 30;
   font-size: var(--font-sm);
 }
 .prefix-hud {
