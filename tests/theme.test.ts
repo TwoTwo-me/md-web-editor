@@ -3,11 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ThemeDefinition } from "../src/ui/theme";
 import {
   applyCustomTheme,
+  getBundledThemes,
+  getCurrentTheme,
   getCustomTheme,
   getPreferences,
+  getSelectedThemeId,
   initializeTheme,
   parseTheme,
   resetCustomTheme,
+  selectBundledTheme,
   updatePreferences,
 } from "../src/ui/theme";
 
@@ -93,6 +97,18 @@ describe("theme and preferences boundaries", () => {
     expect(getCustomTheme()?.name).toBe("Test theme");
   });
 
+  it("bundles the committed theme and persists its selection without fetching", () => {
+    const bundled = getBundledThemes();
+
+    expect(bundled.map((entry) => entry.id)).toContain("quiet-violet");
+    expect(selectBundledTheme("quiet-violet")).toBe(true);
+    initializeTheme();
+
+    expect(getSelectedThemeId()).toBe("quiet-violet");
+    expect(getCurrentTheme().name).toBe("Quiet Violet");
+    expect(document.documentElement.style.getPropertyValue("--bg")).toBe("#211c2b");
+  });
+
   it("persists bounded preferences and emits one update event", () => {
     const listener = vi.fn();
     document.addEventListener("preferences-changed", listener);
@@ -116,5 +132,17 @@ describe("theme and preferences boundaries", () => {
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
     expect(getCustomTheme()).toBeUndefined();
     resetCustomTheme();
+  });
+
+  it("does not report a custom theme as applied when selection persistence fails", () => {
+    const originalSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key, value) {
+      if (key === "md-web-editor:selected-theme")
+        throw new DOMException("blocked", "QuotaExceededError");
+      originalSetItem.call(this, key, value);
+    });
+
+    expect(applyCustomTheme(theme)).toBe(false);
+    expect(getCustomTheme()).toBeUndefined();
   });
 });

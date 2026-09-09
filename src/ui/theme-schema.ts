@@ -115,3 +115,6 @@ export const BUILTIN_THEME: ThemeDefinition = {
     graphEdge: "#bab6c8",
   },
 };
+
+export type BundledThemeId = string;
+export type BundledTheme = Readonly<{ id: BundledThemeId; theme: ThemeDefinition }>;
