@@ -3,6 +3,7 @@ import type { GraphData } from "../core/types";
 import { createGraphCanvas, svgElement } from "./canvas";
 import { groupColor } from "./filter";
 import { createGraphGestures } from "./gestures";
+import { visibleLabelIds } from "./label-layout";
 import type { GraphSettings } from "./settings";
 import {
   createGraphSimulation,
@@ -32,12 +33,24 @@ export type GraphScene = {
   destroy(): void;
 };
 type SavedPosition = Pick<RenderNode, "x" | "y" | "vx" | "vy" | "fx" | "fy">;
+type LabelMetric = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+};
 
 export function createGraphScene(options: SceneOptions): GraphScene {
   let paused = false;
   let simulation: Simulation<RenderNode, undefined> | undefined;
   let nodes: RenderNode[] = [];
   let edges: RenderEdge[] = [];
+  let groups: SVGGElement[] = [];
+  let labelMetrics: readonly LabelMetric[] = [];
+  let active = "";
+  let hovering = "";
+  let labelsVisible = true;
+  let nodeScale = 1;
   const positions = new Map<string, SavedPosition>();
   const canvas = createGraphCanvas();
   const empty = document.createElement("div");
@@ -60,9 +73,12 @@ export function createGraphScene(options: SceneOptions): GraphScene {
   const gestures = createGraphGestures({
     svg: canvas.svg,
     viewport: canvas.viewport,
-    nodeLayer: canvas.nodeLayer,
     dimensions,
     onReheat: reheat,
+    onLabelVisibility(value) {
+      labelsVisible = value;
+      applyLabelLayout();
+    },
   });
   const resize = new ResizeObserver(reheat);
   resize.observe(options.stage);
@@ -82,9 +98,41 @@ export function createGraphScene(options: SceneOptions): GraphScene {
       });
     }
   }
+  function applyLabelLayout(): void {
+    const labels = nodes.flatMap((node, index) => {
+      const metric = labelMetrics[index];
+      if (!metric) return [];
+      return [
+        {
+          id: node.id,
+          x: (node.x ?? 0) + metric.x,
+          y: (node.y ?? 0) + metric.y,
+          width: metric.width,
+          height: metric.height,
+          priority: node.id === hovering ? 3 : node.id === active ? 2 : 1,
+        },
+      ];
+    });
+    const obstacles = nodes.map((node) => ({
+      id: node.id,
+      x: (node.x ?? 0) - (node.id === active ? 9 : 6) * nodeScale,
+      y: (node.y ?? 0) - (node.id === active ? 9 : 6) * nodeScale,
+      width: (node.id === active ? 18 : 12) * nodeScale,
+      height: (node.id === active ? 18 : 12) * nodeScale,
+      priority: 4,
+    }));
+    const visible = visibleLabelIds(labels, obstacles);
+    groups.forEach((group, index) => {
+      const text = group.querySelector<SVGTextElement>("text");
+      text?.toggleAttribute("hidden", !labelsVisible || !visible.has(nodes[index]?.id ?? ""));
+    });
+  }
   function render(renderOptions: SceneRenderOptions): void {
     simulation?.stop();
     paused = renderOptions.paused;
+    active = renderOptions.active;
+    nodeScale = renderOptions.settings.nodeScale;
+    hovering = "";
     savePositions();
     nodes = renderOptions.data.nodes.map((node) => ({
       ...node,
@@ -101,29 +149,36 @@ export function createGraphScene(options: SceneOptions): GraphScene {
       canvas.edgeLayer.append(line);
       return line;
     });
-    const groups = nodes.map((node) => {
+    groups = nodes.map((node) => {
       const group = svgElement("g");
       group.classList.add("graph-node");
       group.setAttribute("data-kind", node.kind);
       const circle = svgElement("circle");
-      circle.setAttribute(
-        "r",
-        String((node.id === renderOptions.active ? 9 : 6) * renderOptions.settings.nodeScale),
-      );
+      const radius = (node.id === renderOptions.active ? 9 : 6) * renderOptions.settings.nodeScale;
+      circle.setAttribute("r", String(radius));
       circle.setAttribute("fill", groupColor(node, renderOptions.settings.groups));
       const title = svgElement("title");
       title.textContent = node.label;
       const label = svgElement("text");
       label.textContent = node.label;
-      label.setAttribute("x", "10");
+      label.setAttribute("x", String(radius + 4));
       label.setAttribute("dy", "0.35em");
       group.append(circle, title, label);
       group.addEventListener("pointerdown", (event) => gestures.startDrag(event, node, circle));
       canvas.nodeLayer.append(group);
       return group;
     });
+    labelMetrics = groups.map((group, index) => {
+      const text = group.querySelector<SVGTextElement>("text");
+      const box = text?.getBBox?.();
+      return {
+        x: box?.x ?? (nodes[index]?.id === active ? 9 : 6) * nodeScale + 4,
+        y: box?.y ?? -7,
+        width: Math.max(box?.width ?? 0, (nodes[index]?.label.length ?? 0) * 7),
+        height: Math.max(box?.height ?? 0, 14),
+      };
+    });
     gestures.setLabelThreshold(renderOptions.settings.labelThreshold);
-    let hovering = "";
     const updateHighlights = () => {
       const related = new Set<string>();
       for (const edge of edges) {
@@ -156,10 +211,12 @@ export function createGraphScene(options: SceneOptions): GraphScene {
       group.addEventListener("pointerenter", () => {
         hovering = node.id;
         updateHighlights();
+        applyLabelLayout();
       });
       group.addEventListener("pointerleave", () => {
         hovering = "";
         updateHighlights();
+        applyLabelLayout();
       });
       group.addEventListener("click", () => {
         if (!gestures.consumeDrag()) options.onOpen(node.id);
@@ -181,6 +238,7 @@ export function createGraphScene(options: SceneOptions): GraphScene {
         const node = nodes[index];
         if (node) group.setAttribute("transform", `translate(${node.x ?? 0} ${node.y ?? 0})`);
       });
+      applyLabelLayout();
     };
     simulation = createGraphSimulation({
       nodes,

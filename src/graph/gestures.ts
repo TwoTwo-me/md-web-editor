@@ -5,9 +5,9 @@ type ClientPoint = { readonly x: number; readonly y: number };
 type GraphGesturesOptions = {
   readonly svg: SVGSVGElement;
   readonly viewport: SVGGElement;
-  readonly nodeLayer: SVGGElement;
   readonly dimensions: () => GraphDimensions;
   readonly onReheat: () => void;
+  readonly onLabelVisibility: (visible: boolean) => void;
 };
 export type GraphGestures = {
   setLabelThreshold(value: number): void;
@@ -34,9 +34,7 @@ export function createGraphGestures(options: GraphGesturesOptions): GraphGesture
       "transform",
       `translate(${transform.x} ${transform.y}) scale(${transform.k})`,
     );
-    options.nodeLayer.querySelectorAll<SVGTextElement>("text").forEach((label) => {
-      label.toggleAttribute("hidden", transform.k < labelThreshold);
-    });
+    options.onLabelVisibility(transform.k >= labelThreshold);
   };
   const point = (event: PointerEvent): GraphDimensions => {
     const rect = options.svg.getBoundingClientRect();

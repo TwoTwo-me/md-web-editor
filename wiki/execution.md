@@ -4,11 +4,11 @@
 |---|---|---|
 | Design and privacy boundary | design complete; isolation decision pending | Obsidian inspected with Computer Use; architecture and ADRs recorded. See ADR 003 for shared-origin review. |
 | Local storage and autosave | implemented and tested | Native disk write/conflict demonstrated; recovery and concurrency regressions added. |
-| Markdown editor and links | review fixes in progress | Source/live/reading, wiki and standard links implemented; pointer/task/reference/footnote regressions under test. |
-| Graph and workspace | implemented; final verification pending | Drag/filter/settings/prefix/themes/panels exercised; missing and ambiguous links corrected. |
+| Markdown editor and links | implemented and tested | Source/live/reading, wiki and standard links; pointer/task/reference/footnote and selection regressions passed. |
+| Graph and workspace | implemented; visual follow-up in progress | Drag/filter/settings/prefix/themes/panels exercised; missing and ambiguous links corrected. |
 | Local milestone verification | passed at integration milestone | 42 tests, check/build, native folder autosave/conflict and responsive QA. |
-| GitHub Pages milestones | first milestone deployed and tested | Actions 34413027854; matching version in real browser; synthetic resource barrier passed. |
-| Final verification and release | pending | Full feature matrix and computer-use disk save on deployed app. |
+| GitHub Pages milestones | multiple candidates deployed and tested | Actions 34417660613 published eaeadfa; real-browser build identity and update verified. Earlier public synthetic folder autosave and resource-barrier observations are recorded separately. |
+| Final verification and release | awaiting owner decisions after final visual fixes | Dedicated hostname and published author-metadata remediation are unresolved. No completed-goal claim. |
 
 No private reference screenshots or machine-specific paths are tracked. Temporary QA artifacts are ignored.
 

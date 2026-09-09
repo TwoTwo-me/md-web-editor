@@ -88,18 +88,14 @@ export function showSettings(): void {
     "Ctrl+Space를 명령 접두어로 사용",
     preferences.prefixControlSpace,
   );
-  const constraint = element(
-    "p",
-    "muted",
-    "접두어를 하나 이상 켜 두면 키보드 명령을 계속 사용할 수 있습니다.",
-  );
+  const constraint = element("p", "muted", "키보드 명령에 쓸 접두어를 하나 이상 켜 두세요.");
   constraint.setAttribute("role", "status");
   const enforcePrefix = (changed: HTMLInputElement): void => {
     if (!escapePrefix.input.checked && !controlSpace.input.checked) {
       changed.checked = true;
-      constraint.textContent = "접두어를 하나 이상 켜 두어야 키보드 명령을 사용할 수 있습니다.";
+      constraint.textContent = "접두어를 모두 끌 수는 없습니다. 하나 이상 켜 두세요.";
     } else {
-      constraint.textContent = "접두어를 하나 이상 켜 두면 키보드 명령을 계속 사용할 수 있습니다.";
+      constraint.textContent = "키보드 명령에 쓸 접두어를 하나 이상 켜 두세요.";
     }
   };
   escapePrefix.input.addEventListener("change", () => enforcePrefix(escapePrefix.input));
@@ -110,12 +106,12 @@ export function showSettings(): void {
   const info = element(
     "p",
     "muted",
-    `${versionText()} · Chrome/Edge에서는 선택한 폴더에 저장할 수 있고, 다른 브라우저에서는 읽기 전용으로 열립니다.`,
+    `${versionText()} · Chrome/Edge는 폴더 편집과 저장을 지원합니다. 다른 브라우저는 읽기 전용입니다.`,
   );
   const privacy = element(
     "p",
     "muted",
-    "노트와 검색 내용은 브라우저 밖으로 전송하지 않습니다. 설정은 이 브라우저에만 저장됩니다.",
+    "노트와 검색 내용은 외부로 전송하지 않습니다. 설정도 브라우저 안에 보관합니다.",
   );
   const save = button(
     "저장",
