@@ -1,0 +1,14 @@
+# md-web-editor wiki
+
+This is the source-of-truth index. Keep pages small, link decisions to implementation and test evidence, and distinguish observed results from planned work. No personal vault data, absolute user paths, screenshots of personal applications, credentials, or internal chat transcripts belong here.
+
+- [Product contract](product.md)
+- [Architecture](architecture.md)
+- [Local data and network boundary](decisions/001-local-data.md)
+- [Keyboard model](decisions/002-commands.md)
+- [Design system](../DESIGN.md)
+- [Execution ledger](execution.md)
+- [Version and release policy](versioning.md)
+- [Verification](verification.md)
+
+All examples and QA notes are synthetic. Source notes stay on the user's device. Git tracks the application and this wiki only.
