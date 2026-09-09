@@ -51,6 +51,7 @@ export type GraphNode = {
   readonly kind: "note" | "missing" | "tag" | "asset";
   readonly tags: readonly string[];
   readonly modified: number;
+  readonly candidates?: readonly string[];
 };
 export type GraphEdge = { readonly source: string; readonly target: string };
 export type GraphData = {

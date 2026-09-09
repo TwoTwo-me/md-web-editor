@@ -6,7 +6,12 @@ import { buildGraph } from "./graph-data";
 import { Sessions } from "./sessions";
 import type { EditorMode, Note, NoteLink, Vault } from "./types";
 import { initialWorkspaceNote, readWorkspaceNotes } from "./workspace-data";
-import { createWorkspaceNote, followWorkspaceLink, refreshWorkspace } from "./workspace-operations";
+import {
+  createWorkspaceNote,
+  followGraphNode,
+  followWorkspaceLink,
+  refreshWorkspace,
+} from "./workspace-operations";
 export class Workspace {
   vault: Vault | undefined;
   sessions: Sessions | undefined;
@@ -14,6 +19,7 @@ export class Workspace {
   graphView: GraphView | undefined;
   graphVisible = false;
   private generation = 0;
+  private openGeneration = 0;
   private indexTimer: ReturnType<typeof setTimeout> | undefined;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   constructor(readonly shell: Shell) {
@@ -131,7 +137,9 @@ export class Workspace {
   }
   async open(path: string) {
     if (!this.sessions) return;
+    const token = ++this.openGeneration;
     if (!(await this.sessions.open(path))) {
+      if (token !== this.openGeneration) return;
       this.sessions.saveDialog();
       return;
     }
@@ -179,7 +187,7 @@ export class Workspace {
         parent: this.shell.graph,
         data: this.graphData(),
         active: this.sessions?.active ?? "",
-        onOpen: (id) => this.run(() => this.follow(id)),
+        onOpen: (id) => this.run(() => followGraphNode(this, id)),
         local,
       });
     this.render();

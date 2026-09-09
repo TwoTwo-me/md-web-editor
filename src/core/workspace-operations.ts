@@ -7,6 +7,23 @@ import type { NoteLink } from "./types";
 import type { Workspace } from "./workspace";
 import { readWorkspaceNotes } from "./workspace-data";
 
+export async function followGraphNode(workspace: Workspace, id: string): Promise<void> {
+  const node = workspace.graphData().nodes.find((item) => item.id === id);
+  if (!node) return;
+  if (node.candidates) {
+    showChoices(
+      "같은 이름의 노트",
+      node.candidates.map((path) => ({
+        label: path,
+        run: () => workspace.run(() => workspace.open(path)),
+      })),
+    );
+  } else if (node.kind === "missing") createWorkspaceNote(workspace, node.id);
+  else if (node.kind === "note") await workspace.open(node.id);
+  else if (node.kind === "asset")
+    workspace.notice("이미지 첨부는 노트 안에서 미리 볼 수 있습니다.");
+}
+
 export async function followWorkspaceLink(
   workspace: Workspace,
   target: string,

@@ -31,6 +31,7 @@ export function createGraphController(options: CreateGraphOptions): GraphView {
   let timeline = 0;
   let timelineTimer: number | undefined;
   let paused = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let destroyed = false;
   const root = document.createElement("section");
   root.className = "graph-view";
   const stage = document.createElement("div");
@@ -127,6 +128,7 @@ export function createGraphController(options: CreateGraphOptions): GraphView {
     render();
   }
   function render(): void {
+    if (destroyed) return;
     const result = filterGraph(data, {
       local,
       active,
@@ -161,7 +163,10 @@ export function createGraphController(options: CreateGraphOptions): GraphView {
       render();
     },
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
       stopTimeline();
+      controls.destroy();
       scene.destroy();
       root.remove();
     },

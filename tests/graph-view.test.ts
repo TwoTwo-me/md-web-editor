@@ -82,6 +82,24 @@ describe("createGraph", () => {
     vi.useRealTimers();
   });
 
+  it("does not render a pending search after destroy", () => {
+    // Given: a graph with a scheduled search filter.
+    vi.useFakeTimers();
+    const parent = document.createElement("div");
+    const graph = createGraph({ parent, data, active: "a.md", local: false, onOpen: () => {} });
+    const root = parent.firstElementChild;
+    const search = parent.querySelector<HTMLInputElement>('input[type="search"]');
+    if (!root || !search) throw new Error("expected graph view and search control");
+    search.value = "no matching note";
+    search.dispatchEvent(new Event("input"));
+    // When: the graph is destroyed before the debounce expires.
+    graph.destroy();
+    vi.advanceTimersByTime(120);
+    vi.useRealTimers();
+    // Then: the detached scene retains its rendered nodes instead of being filtered and rebuilt.
+    expect(root.querySelectorAll(".graph-node")).toHaveLength(data.nodes.length);
+  });
+
   it("places initial nodes when reduced motion starts paused", () => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,

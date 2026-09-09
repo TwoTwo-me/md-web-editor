@@ -5,6 +5,7 @@ import { createSettingsPanel } from "./settings-panel";
 type Action = "fit" | "reset" | "reheat" | "pause" | "timeline" | "zoom-in" | "zoom-out";
 export type GraphControls = {
   readonly root: HTMLElement;
+  destroy(): void;
   setLocal(value: boolean): void;
   setSearch(value: string): void;
   setSettings(value: GraphSettings): void;
@@ -53,9 +54,14 @@ export function createGraphControls(options: GraphControlsOptions): GraphControl
   search.placeholder = "노트, 경로, 태그 검색";
   search.setAttribute("aria-label", "그래프 노트, 경로, 태그 검색");
   let timer = 0;
+  let destroyed = false;
   search.addEventListener("input", () => {
+    if (destroyed) return;
     window.clearTimeout(timer);
-    timer = window.setTimeout(() => options.onSearch(search.value), 120);
+    timer = window.setTimeout(() => {
+      timer = 0;
+      if (!destroyed) options.onSearch(search.value);
+    }, 120);
   });
   const local = document.createElement("input");
   local.type = "checkbox";
@@ -118,6 +124,10 @@ export function createGraphControls(options: GraphControlsOptions): GraphControl
   root.append(toolbar, timeline, panel.root, list);
   return {
     root,
+    destroy() {
+      destroyed = true;
+      window.clearTimeout(timer);
+    },
     setLocal(value) {
       local.checked = value;
     },

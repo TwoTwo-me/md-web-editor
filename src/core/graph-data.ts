@@ -18,6 +18,20 @@ export function buildGraph(notes: readonly Note[], entries: readonly VaultEntry[
     const index = indexDocument(note.content);
     for (const link of index.links) {
       const resolved = resolveLink(note.path, link.target, paths, link.kind);
+      if (resolved.kind === "ambiguous") {
+        const id = `?${JSON.stringify([note.path, link.target])}`;
+        nodes.set(id, {
+          id,
+          label: `${link.label || link.target} (?)`,
+          kind: "missing",
+          tags: [],
+          modified: 0,
+          candidates: resolved.paths,
+        });
+        if (!edges.some((edge) => edge.source === note.path && edge.target === id))
+          edges.push({ source: note.path, target: id });
+        continue;
+      }
       if (resolved.kind !== "note" && resolved.kind !== "missing") continue;
       const path = resolved.path;
       const entry = entries.find((e) => e.path === path);
