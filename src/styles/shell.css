@@ -461,6 +461,7 @@
   bottom: 42px;
   left: 50%;
   transform: translateX(-50%);
+  width: max-content;
   max-width: min(560px, 90vw);
   display: flex;
   flex-direction: column;

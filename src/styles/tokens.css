@@ -129,6 +129,14 @@ input[type="checkbox"] {
   gap: var(--s2);
   margin-bottom: var(--s4);
 }
+.checkbox-field {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+.checkbox-field input {
+  margin: 0;
+  padding: 0;
+}
 .field-label {
   color: var(--muted);
   font-size: var(--font-sm);
