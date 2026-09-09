@@ -58,9 +58,15 @@ vi.mock("../src/editor/editor", () => ({
 }));
 
 vi.mock("../src/storage/autosave", () => ({
-  createAutosave: (options: { readonly snapshot: FileSnapshot }) => ({
+  createAutosave: (options: {
+    readonly snapshot: FileSnapshot;
+    readonly onStatus: (status: { readonly kind: "saved" }) => void;
+  }) => ({
     edit: (content: string) => autosaves.edits.push({ content, snapshot: options.snapshot }),
-    flush: async () => true,
+    flush: async () => {
+      options.onStatus({ kind: "saved" });
+      return true;
+    },
     getContent: () => "",
     getSnapshot: () => ({ content: "", fingerprint: "" }),
     dispose: () => undefined,
@@ -217,6 +223,31 @@ describe("Sessions async safety", () => {
     await expect(opening).resolves.toBe(true);
 
     expect(journal.discardSpecificDraft).not.toHaveBeenCalled();
+  });
+
+  it("discards the selected matching recovery draft after it saves", async () => {
+    const vault = new BarrierVault("matching-recovery", { "one.md": "disk base" });
+    const sessions = createSessions(vault);
+    const draft = {
+      vaultId: vault.id,
+      path: "one.md",
+      content: "recovered draft",
+      baseFingerprint: "fingerprint:disk base",
+      revision: 1,
+      savedAt: 1,
+    };
+    journal.readDraft.mockResolvedValue(draft);
+
+    const opening = sessions.open("one.md");
+    await vi.waitFor(() => expect(harness.bodies).toHaveLength(1));
+    [...(harness.bodies[0]?.querySelectorAll("button") ?? [])]
+      .find((button) => button.textContent === "복구본 열기")
+      ?.click();
+    await expect(opening).resolves.toBe(true);
+    expect(sessions.current()?.recovery).toEqual(draft);
+
+    await expect(sessions.flush()).resolves.toBe(true);
+    await vi.waitFor(() => expect(journal.discardSpecificDraft).toHaveBeenCalledWith(draft));
   });
 
   it("holds existing editors read-only until a vault operation releases them", async () => {

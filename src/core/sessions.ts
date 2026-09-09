@@ -3,7 +3,7 @@ import { resolveLink } from "../editor/markdown";
 import { type Autosave, createAutosave, type SaveStatus } from "../storage/autosave";
 import { type Draft, discardDraft, discardSpecificDraft, readDraft } from "../storage/journal";
 import { element } from "../ui/dom";
-import { offerRecovery } from "./session-recovery";
+import { discardSavedRecovery, offerRecovery } from "./session-recovery";
 import { showSaveDialog } from "./session-save-dialog";
 import type { EditorMode, FileSnapshot, NoteEditor, NoteLink, Vault } from "./types";
 export type Session = {
@@ -61,6 +61,7 @@ export class Sessions {
       if (token !== this.generation) return false;
       let content = snapshot.content;
       let needsRecoveryReview = false;
+      let recovery: Draft | undefined;
       const draft = await readDraft(this.options.vault.id, path);
       if (token !== this.generation) return false;
       if (draft && draft.content !== content && this.options.vault.kind !== "readonly") {
@@ -73,6 +74,7 @@ export class Sessions {
         if (token !== this.generation) return false;
         if (recovered === "recover") {
           content = draft.content;
+          recovery = draft;
           needsRecoveryReview = draft.baseFingerprint !== snapshot.fingerprint;
         } else if (recovered === "disk") await discardSpecificDraft(draft);
       }
@@ -118,7 +120,7 @@ export class Sessions {
           : { kind: "saved" },
         snapshot,
         revision: 0,
-        recovery: needsRecoveryReview ? draft : undefined,
+        recovery,
       };
       this.items.set(path, session);
       const saveSnapshot =
@@ -156,6 +158,7 @@ export class Sessions {
       snapshot,
       onStatus: (status) => {
         session.status = status;
+        if (status.kind === "saved") void discardSavedRecovery(session).catch(() => undefined);
         this.options.onStatus();
       },
     });

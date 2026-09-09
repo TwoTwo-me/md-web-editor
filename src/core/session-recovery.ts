@@ -1,7 +1,16 @@
+import { discardSpecificDraft } from "../storage/journal";
 import { openDialog } from "../ui/dialog";
 import { button, download, element } from "../ui/dom";
+import type { Session } from "./sessions";
 
 export type RecoveryChoice = "recover" | "disk" | "dismiss";
+
+export async function discardSavedRecovery(session: Session): Promise<void> {
+  const recovery = session.recovery;
+  if (!recovery) return;
+  await discardSpecificDraft(recovery);
+  if (session.recovery === recovery) session.recovery = undefined;
+}
 
 export function offerRecovery(
   path: string,
