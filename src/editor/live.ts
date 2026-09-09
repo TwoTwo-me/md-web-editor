@@ -121,8 +121,10 @@ class PreviewWidget extends WidgetType {
 }
 
 function activeBlock(state: EditorState): string {
-  const block = blocks(state).find((item) => selected(state, item));
-  return block ? `${block.from}:${block.to}` : "";
+  return blocks(state)
+    .filter((item) => selected(state, item))
+    .map((item) => `${item.from}:${item.to}`)
+    .join(",");
 }
 
 function decorations(
