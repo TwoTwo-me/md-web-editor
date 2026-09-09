@@ -77,6 +77,11 @@ export function renderWorkspace(app: Workspace) {
     active,
     (path, kind) => app.run(() => app.follow(path, kind)),
     (line) => sessions?.current()?.editor.goToLine(line),
+    () => {
+      shell.shell.classList.remove("show-inspector");
+      if (innerWidth > 1100) shell.shell.classList.add("hide-inspector");
+      shell.modeTools.querySelector<HTMLButtonElement>('[title="정보 패널 표시"]')?.focus();
+    },
   );
   app.renderStatus();
 }

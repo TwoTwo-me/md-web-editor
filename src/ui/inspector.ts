@@ -1,14 +1,19 @@
 import type { Note, NoteLink } from "../core/types";
 import { indexDocument, resolveLink } from "../editor/markdown";
-import { button, element } from "./dom";
+import { button, element, iconButton } from "./dom";
 export function renderInspector(
   parent: HTMLElement,
   notes: readonly Note[],
   active: string,
   onOpen: (path: string, kind?: NoteLink["kind"]) => void,
   onLine: (line: number) => void,
+  onClose: () => void,
 ) {
-  parent.replaceChildren(element("div", "inspector-header", "연결과 개요"));
+  const resize = parent.querySelector(".resize-handle");
+  const header = element("div", "inspector-header");
+  header.append(element("span", "", "연결과 개요"), iconButton("정보 패널 닫기", "×", onClose));
+  parent.replaceChildren(header);
+  if (resize) parent.append(resize);
   const note = notes.find((n) => n.path === active);
   if (!note) {
     const section = element("section", "inspector-section");
