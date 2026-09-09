@@ -44,4 +44,26 @@ describe("Markdown reading surface", () => {
     expect(calls).toEqual([target]);
     release();
   });
+
+  it("keeps footnote navigation inside the rendered document", () => {
+    const root = document.createElement("article");
+    const calls: string[] = [];
+    const release = renderMarkdown("note[^1]\n\n[^1]: definition", {
+      source: "note.md",
+      root,
+      asset: async () => undefined,
+      onLink: (target) => calls.push(target),
+    });
+    const destination = root.querySelector<HTMLElement>("#fn1");
+    let scrolled = false;
+    Object.defineProperty(destination ?? root, "scrollIntoView", {
+      value: () => {
+        scrolled = true;
+      },
+    });
+    root.querySelector<HTMLElement>("[data-md-href='#fn1']")?.click();
+    expect(scrolled).toBe(true);
+    expect(calls).toEqual([]);
+    release();
+  });
 });

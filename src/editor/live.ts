@@ -2,7 +2,7 @@ import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import { type EditorState, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 import type { NoteLink } from "../core/types";
-import { renderMarkdown } from "./markdown";
+import { type MarkdownContext, markdownContext, renderMarkdown, taskOffsets } from "./markdown";
 
 type LiveOptions = {
   readonly path: () => string;
@@ -27,14 +27,11 @@ function selected(state: EditorState, block: Block): boolean {
   return range.from <= block.to && range.to >= block.from;
 }
 
-function taskPositions(content: string): readonly number[] {
-  return [...content.matchAll(/\[[ xX]\]/gu)].map((match) => (match.index ?? 0) + 1);
-}
-
 class PreviewWidget extends WidgetType {
   constructor(
     private readonly from: number,
     private readonly content: string,
+    private readonly context: MarkdownContext,
     private readonly options: LiveOptions,
   ) {
     super();
@@ -42,7 +39,17 @@ class PreviewWidget extends WidgetType {
 
   eq(other: WidgetType): boolean {
     return (
-      other instanceof PreviewWidget && other.content === this.content && other.from === this.from
+      other instanceof PreviewWidget &&
+      other.content === this.content &&
+      other.from === this.from &&
+      other.context === this.context
+    );
+  }
+
+  ignoreEvent(event: Event): boolean {
+    return (
+      event.target instanceof Element &&
+      event.target.closest("[data-md-href], [data-md-footnote], .task-checkbox") !== null
     );
   }
 
@@ -54,9 +61,22 @@ class PreviewWidget extends WidgetType {
       root,
       asset: this.options.asset,
       onLink: this.options.onLink,
+      context: this.context,
+      onFootnote: (id) => this.goToFootnote(view, id),
     });
     root.classList.add("cm-md-preview");
-    const offsets = taskPositions(this.content);
+    root.addEventListener("mousedown", (event) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest("[data-md-href], [data-md-footnote], .task-checkbox")
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      view.dispatch({ selection: { anchor: this.from } });
+      view.focus();
+    });
+    const offsets = taskOffsets(this.content);
     root.querySelectorAll<HTMLElement>(".task-checkbox").forEach((box, index) => {
       box.tabIndex = this.options.writable() ? 0 : -1;
       box.addEventListener("click", () => this.toggle(view, offsets[index]));
@@ -87,15 +107,31 @@ class PreviewWidget extends WidgetType {
       },
     });
   }
+
+  private goToFootnote(view: EditorView, id: string): void {
+    const position = this.context.footnotes.get(id);
+    if (position === undefined) return;
+    view.dispatch({
+      selection: { anchor: position },
+      effects: EditorView.scrollIntoView(position),
+    });
+    view.focus();
+  }
 }
 
 function decorations(state: EditorState, options: LiveOptions): DecorationSet {
+  const context = markdownContext(state.doc.toString());
   const ranges = blocks(state)
     .filter((block) => !selected(state, block))
     .map((block) =>
       Decoration.replace({
         block: true,
-        widget: new PreviewWidget(block.from, state.sliceDoc(block.from, block.to), options),
+        widget: new PreviewWidget(
+          block.from,
+          state.sliceDoc(block.from, block.to),
+          context,
+          options,
+        ),
       }).range(block.from, block.to),
     );
   return Decoration.set(ranges, true);

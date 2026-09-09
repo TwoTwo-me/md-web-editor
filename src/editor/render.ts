@@ -1,12 +1,22 @@
 import DOMPurify from "dompurify";
 import type { NoteLink } from "../core/types";
-import { decoded, directory, indexDocument, markdownHtml, safePath, wikiParts } from "./markdown";
+import {
+  decoded,
+  directory,
+  indexDocument,
+  type MarkdownContext,
+  markdownHtml,
+  safePath,
+} from "./markdown";
+import { footnoteNodes, wikiNodes } from "./render-nodes";
 
 type RenderOptions = {
   readonly source: string;
   readonly root: HTMLElement;
   readonly asset: (target: string) => Promise<Blob | undefined>;
   readonly onLink: (target: string, kind?: NoteLink["kind"]) => void;
+  readonly context?: MarkdownContext;
+  readonly onFootnote?: (id: string) => void;
 };
 
 const resources = new Set([
@@ -94,56 +104,46 @@ function validRaster(blob: Blob): Promise<boolean> {
 
 function taskMarkup(html: string): string {
   return html.replace(
-    /<li>\s*\[([ xX])\]\s+/gu,
-    (_all, checked: string) =>
-      `<li class="task-list-item"><span class="task-checkbox" role="checkbox" aria-checked="${checked !== " "}"></span>`,
+    /<li>\s*(<p>)?\[([ xX])\]\s+/gu,
+    (_all, paragraph: string | undefined, checked: string) =>
+      `<li class="task-list-item">${paragraph ?? ""}<span class="task-checkbox" role="checkbox" aria-checked="${checked !== " "}"></span>`,
   );
 }
 
-function wikiNodes(root: HTMLElement): void {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const nodes: Text[] = [];
-  for (let current = walker.nextNode(); current; current = walker.nextNode())
-    if (current instanceof Text && !current.parentElement?.closest("a, code, pre"))
-      nodes.push(current);
-  for (const node of nodes) {
-    if (!/!?\[\[[^\]\n]+\]\]/u.test(node.data)) continue;
-    const fragment = document.createDocumentFragment();
-    let cursor = 0;
-    for (const match of node.data.matchAll(/(!)?\[\[([^\]\n]+)\]\]/gu)) {
-      const index = match.index ?? 0;
-      fragment.append(node.data.slice(cursor, index));
-      const parts = wikiParts(match[2] ?? "");
-      const item = document.createElement(match[1] ? "img" : "a");
-      if (item instanceof HTMLImageElement) {
-        item.alt = parts.label;
-        item.setAttribute("data-md-src", parts.target);
-      } else {
-        item.textContent = parts.label;
-        item.setAttribute("data-md-href", parts.target);
-        item.setAttribute("data-md-kind", "wiki");
-      }
-      fragment.append(item);
-      cursor = index + (match[0]?.length ?? 0);
+function followAnchor(options: RenderOptions, target: string, kind: NoteLink["kind"]): void {
+  if (target.startsWith("#")) {
+    const destination = [...options.root.querySelectorAll<HTMLElement>("[id]")].find(
+      (element) => element.id === target.slice(1),
+    );
+    if (destination) {
+      destination.scrollIntoView({ block: "center" });
+      return;
     }
-    fragment.append(node.data.slice(cursor));
-    node.replaceWith(fragment);
   }
+  options.onLink(target, kind);
 }
 
 export function renderMarkdown(content: string, options: RenderOptions): () => void {
   sanitize();
   options.root.replaceChildren();
   options.root.className = "markdown-reading";
-  options.root.innerHTML = DOMPurify.sanitize(taskMarkup(markdownHtml(content)), {
-    ADD_ATTR: ["data-md-href", "data-md-src", "class", "role", "aria-checked"],
-    FORBID_TAGS: forbidden,
-    FORBID_ATTR: ["style", "ping", "target"],
-  });
+  options.root.innerHTML = DOMPurify.sanitize(
+    taskMarkup(markdownHtml(content, options.context?.environment)),
+    {
+      ADD_ATTR: ["data-md-href", "data-md-src", "class", "role", "aria-checked"],
+      FORBID_TAGS: forbidden,
+      FORBID_ATTR: ["style", "ping", "target"],
+    },
+  );
   wikiNodes(options.root);
+  if (options.context) footnoteNodes(options.root, options.context.footnotes);
   for (const link of options.root.querySelectorAll<HTMLElement>("[data-md-href]")) {
     link.tabIndex = 0;
     link.setAttribute("role", "link");
+  }
+  for (const footnote of options.root.querySelectorAll<HTMLElement>("[data-md-footnote]")) {
+    footnote.tabIndex = 0;
+    footnote.setAttribute("role", "link");
   }
   const headings = indexDocument(content).headings;
   options.root.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6").forEach((heading, index) => {
@@ -155,23 +155,51 @@ export function renderMarkdown(content: string, options: RenderOptions): () => v
   const urls = new Set<string>();
   let disposed = false;
   const onClick = (event: MouseEvent): void => {
+    const footnote =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>("[data-md-footnote]")
+        : null;
+    const id = footnote?.getAttribute("data-md-footnote");
+    if (id && options.onFootnote) {
+      event.preventDefault();
+      options.onFootnote(id);
+      return;
+    }
     const link =
       event.target instanceof Element ? event.target.closest<HTMLElement>("[data-md-href]") : null;
     const target = link?.getAttribute("data-md-href");
     if (target) {
       event.preventDefault();
-      options.onLink(target, link?.getAttribute("data-md-kind") === "wiki" ? "wiki" : "markdown");
+      followAnchor(
+        options,
+        target,
+        link?.getAttribute("data-md-kind") === "wiki" ? "wiki" : "markdown",
+      );
     }
   };
   options.root.addEventListener("click", onClick);
   const onKeydown = (event: KeyboardEvent): void => {
     if (event.key !== "Enter" && event.key !== " ") return;
+    const footnote =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>("[data-md-footnote]")
+        : null;
+    const id = footnote?.getAttribute("data-md-footnote");
+    if (id && options.onFootnote) {
+      event.preventDefault();
+      options.onFootnote(id);
+      return;
+    }
     const link =
       event.target instanceof Element ? event.target.closest<HTMLElement>("[data-md-href]") : null;
     const target = link?.getAttribute("data-md-href");
     if (!target) return;
     event.preventDefault();
-    options.onLink(target, link?.getAttribute("data-md-kind") === "wiki" ? "wiki" : "markdown");
+    followAnchor(
+      options,
+      target,
+      link?.getAttribute("data-md-kind") === "wiki" ? "wiki" : "markdown",
+    );
   };
   options.root.addEventListener("keydown", onKeydown);
   for (const image of options.root.querySelectorAll<HTMLImageElement>("img[data-md-src]")) {

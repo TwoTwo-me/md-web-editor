@@ -1,3 +1,4 @@
+import type { Env } from "markdown-it";
 import MarkdownIt from "markdown-it";
 import footnote from "markdown-it-footnote";
 import type { DocumentIndex, NoteLink, ResolvedLink } from "../core/types";
@@ -11,7 +12,42 @@ function enableFootnotes(): void {
 }
 
 enableFootnotes();
-export const markdownHtml = (content: string): string => md.render(content);
+export type MarkdownContext = {
+  readonly environment: Env;
+  readonly footnotes: ReadonlyMap<string, number>;
+};
+
+export function markdownContext(content: string): MarkdownContext {
+  const parsed: Env = {};
+  md.parse(content, parsed);
+  const environment: Env = parsed.references ? { references: parsed.references } : {};
+  const footnotes = new Map<string, number>();
+  for (const match of content.matchAll(/^\[\^([^\]\n]+)\]:/gmu)) {
+    footnotes.set(match[1] ?? "", match.index ?? 0);
+  }
+  return { environment, footnotes };
+}
+
+export const markdownHtml = (content: string, environment?: Env): string =>
+  md.render(content, environment);
+
+export function taskOffsets(content: string): readonly number[] {
+  const offsets: number[] = [];
+  const starts = [0];
+  for (const match of content.matchAll(/\n/gu)) starts.push((match.index ?? 0) + 1);
+  for (const token of md.parse(content, {})) {
+    if (token.type !== "list_item_open" || token.map === null) continue;
+    const line = token.map[0];
+    if (line === undefined) continue;
+    const start = starts[line];
+    if (start === undefined) continue;
+    const end = content.indexOf("\n", start);
+    const text = content.slice(start, end < 0 ? content.length : end);
+    const marker = /^(?:[ \t]*>\s*)*[ \t]*(?:[-+*]|\d+[.)])[ \t]+\[([ xX])\]/u.exec(text);
+    if (marker) offsets.push(start + (marker[0]?.lastIndexOf("[") ?? 0) + 1);
+  }
+  return offsets;
+}
 
 function slug(text: string, counts: Map<string, number>): string {
   const base =

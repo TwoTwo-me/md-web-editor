@@ -66,6 +66,132 @@ describe("CodeMirror editor modes", () => {
     editor.destroy();
   });
 
+  it("maps rendered task controls to actual task-list markers only", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "# Active\n\n- [ ] first\n- explanatory [ ] text\n- [ ] second",
+      readonly: false,
+      mode: "live",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    parent.querySelectorAll<HTMLElement>(".task-checkbox")[1]?.click();
+    expect(editor.getContent()).toContain("- [ ] first");
+    expect(editor.getContent()).toContain("- explanatory [ ] text");
+    expect(editor.getContent()).toContain("- [x] second");
+    editor.destroy();
+  });
+
+  it("excludes fenced fake tasks and maps quote-prefixed task markers", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content:
+        "# Active\n\n- [ ] first\n  ```\n  - [ ] fake\n  ```\n- [ ] second\n\n> - [ ] quoted",
+      readonly: false,
+      mode: "live",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    const boxes = parent.querySelectorAll<HTMLElement>(".task-checkbox");
+    boxes[1]?.click();
+    boxes[2]?.click();
+    expect(editor.getContent()).toContain("- [ ] fake");
+    expect(editor.getContent()).toContain("- [x] second");
+    expect(editor.getContent()).toContain("> - [x] quoted");
+    editor.destroy();
+  });
+
+  it("keeps loose-list paragraphs while mapping the second task checkbox", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "# Active\n\n- [ ] first\n\n- [ ] second",
+      readonly: false,
+      mode: "live",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    const boxes = parent.querySelectorAll<HTMLElement>(".task-checkbox");
+    expect(boxes).toHaveLength(2);
+    boxes[1]?.click();
+    expect(editor.getContent()).toContain("- [ ] first\n\n- [x] second");
+    editor.destroy();
+  });
+
+  it("returns a plain rendered block to source editing on pointer selection", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "# Active\n\nplain prose",
+      readonly: false,
+      mode: "live",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    const prose = parent.querySelector<HTMLElement>(".markdown-reading p");
+    prose?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    expect(parent.querySelector(".markdown-reading p")).toBeNull();
+    editor.format("bold");
+    expect(editor.getContent()).toContain("**");
+    editor.destroy();
+  });
+
+  it("shares references and footnotes across inactive live-preview blocks", () => {
+    const parent = document.createElement("main");
+    const links: string[] = [];
+    const editor = createEditor({
+      parent,
+      content:
+        "# Active\n\n[reference][start]\n\n[start]: ../start.md\n\nfootnote[^1]\n\n[^1]: text",
+      readonly: false,
+      mode: "live",
+      path: "folder/note.md",
+      onChange: () => undefined,
+      onLink: (target) => links.push(target),
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    const link = parent.querySelector<HTMLElement>("[data-md-href='../start.md']");
+    expect(link?.getAttribute("href")).toBeNull();
+    link?.click();
+    expect(links).toEqual(["../start.md"]);
+    expect(parent.querySelectorAll(".footnotes")).toHaveLength(0);
+    expect(parent.querySelector(".footnote-ref")?.textContent).toBe("[1]");
+    editor.destroy();
+  });
+
+  it("opens a live footnote definition in exact source", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "# Active\n\nfootnote[^1]\n\n[^1]: definition",
+      readonly: false,
+      mode: "live",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    parent.querySelector<HTMLElement>("[data-md-footnote='1']")?.click();
+    expect(parent.querySelector(".cm-content")?.textContent).toContain("[^1]: definition");
+    editor.destroy();
+  });
+
   it("never applies programmatic formatting while readonly", () => {
     const parent = document.createElement("main");
     const editor = createEditor({
