@@ -1,7 +1,7 @@
 import type { VaultEntry } from "../core/types";
 import { listStored, writeStored } from "./browser-store";
 import { VaultError, vaultError } from "./errors";
-import { isImagePath, isNotePath, normalizePath } from "./paths";
+import { isNotePath, normalizePath } from "./paths";
 
 const queues = new Map<string, Promise<unknown>>();
 
@@ -31,7 +31,7 @@ export async function scanDirectory(
       throw error;
     }
     if (handle.kind === "directory") entries.push(...(await scanDirectory(handle, path)));
-    if (handle.kind === "file" && (isNotePath(path) || isImagePath(path))) {
+    if (handle.kind === "file") {
       const file = await handle.getFile();
       entries.push({
         path,

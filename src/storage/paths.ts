@@ -38,7 +38,12 @@ export function importPath(relativePath: string): string | undefined {
   const parts = relativePath.replaceAll("\\", "/").split("/");
   const content = parts.length > 1 ? parts.slice(1) : parts;
   if (content.some((part) => sensitiveDirectories.has(part.toLowerCase()))) return undefined;
-  return normalizePath(content.join("/"));
+  try {
+    return normalizePath(content.join("/"));
+  } catch (error) {
+    if (error instanceof VaultError && error.code === "invalid-path") return undefined;
+    throw error;
+  }
 }
 
 function isSafePart(part: string): boolean {

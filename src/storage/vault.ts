@@ -47,12 +47,8 @@ export async function importFolder(files: FileList): Promise<Vault> {
       throw new VaultError("exists", `The imported folder has two files named ${path}.`);
     seen.add(path);
     if (isNotePath(path)) {
-      assertSize(file.size, MAX_NOTE_BYTES, `Note ${path}`);
       imported.push({ file, path, kind: "note" });
-    } else if (isImagePath(path)) {
-      assertSize(file.size, MAX_ASSET_BYTES, `Asset ${path}`);
-      imported.push({ file, path, kind: "asset" });
-    }
+    } else imported.push({ file, path, kind: "asset" });
   }
   return new ImportVault(`import:${crypto.randomUUID()}`, imported);
 }
@@ -100,6 +96,17 @@ class FolderVault implements WritableVault {
     } catch (error) {
       if (error instanceof VaultError) throw error;
       throw vaultError(error, "The asset could not be read.");
+    }
+  }
+
+  async file(path: string): Promise<File | undefined> {
+    this.ensureOpen();
+    const normalized = normalizePath(path);
+    try {
+      return await readFile(this.root, normalized);
+    } catch (error) {
+      if (error instanceof VaultError) throw error;
+      throw vaultError(error, "The file could not be read.");
     }
   }
 
@@ -197,26 +204,36 @@ class ImportVault implements VaultBase {
   }
 
   async read(path: string): Promise<FileSnapshot> {
-    const file = this.find(path, "note");
+    const file = this.find(path, "note").file;
     assertSize(file.size, MAX_NOTE_BYTES, `Note ${path}`);
     return snapshot(await file.text());
   }
 
   async asset(path: string): Promise<Blob | undefined> {
-    const file = this.find(path, "asset");
-    assertSize(file.size, MAX_ASSET_BYTES, `Asset ${path}`);
+    const normalized = normalizePath(path);
+    if (!isImagePath(normalized)) return undefined;
+    const file = this.find(normalized, "asset").file;
+    assertSize(file.size, MAX_ASSET_BYTES, `Asset ${normalized}`);
     return (await validImage(file)) ? file : undefined;
+  }
+
+  async file(path: string): Promise<File | undefined> {
+    return this.find(normalizePath(path)).file;
   }
 
   async refresh(): Promise<void> {}
   close(): void {}
 
-  private find(path: string, kind: Imported["kind"]): File {
+  private find(path: string, kind?: Imported["kind"]): Imported {
     const normalized = normalizePath(path);
     const item = this.files.find(
-      (candidate) => candidate.path === normalized && candidate.kind === kind,
+      (candidate) =>
+        candidate.path === normalized && (kind === undefined || candidate.kind === kind),
     );
-    if (!item) throw new VaultError("missing", `No ${kind} exists at ${normalized}.`);
-    return item.file;
+    if (!item) {
+      const label = kind ?? "file";
+      throw new VaultError("missing", `No ${label} exists at ${normalized}.`);
+    }
+    return item;
   }
 }

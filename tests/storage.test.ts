@@ -12,7 +12,7 @@ import {
   writeDraft,
 } from "../src/storage/journal";
 import { importPath, normalizePath } from "../src/storage/paths";
-import { createDemoVault } from "../src/storage/vault";
+import { createDemoVault, importFolder } from "../src/storage/vault";
 
 let restoreStore: (() => void) | undefined;
 
@@ -120,7 +120,50 @@ describe("vault paths", () => {
       content: "# Kept note",
     });
   });
+
+  it("indexes arbitrary imported files without reading them and serves their bytes on demand", async () => {
+    const binary = new File([new Uint8Array(20 * 1024 * 1024 + 1)], "archive.bin", {
+      type: "application/octet-stream",
+      lastModified: 42,
+    });
+    const vault = await importFolder(fileList(binary));
+
+    expect(vault.entries).toEqual([{ path: "archive.bin", kind: "asset", modified: 42 }]);
+    await expect(vault.file?.("archive.bin")).resolves.toBe(binary);
+    await expect(vault.asset("archive.bin")).resolves.toBeUndefined();
+  });
+
+  it("keeps image signature validation strict while exposing valid image files", async () => {
+    const invalid = new File([new Uint8Array([0, 1, 2, 3])], "fake.png", { type: "image/png" });
+    const valid = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], "real.png", {
+      type: "image/png",
+    });
+    const vault = await importFolder(fileList(invalid, valid));
+
+    await expect(vault.asset("fake.png")).resolves.toBeUndefined();
+    await expect(vault.asset("real.png")).resolves.toBe(valid);
+    await expect(vault.file?.("fake.png")).resolves.toBe(invalid);
+  });
+
+  it("skips ignored hidden imports while retaining valid files", async () => {
+    const valid = new File(["# note"], "entry.md", { lastModified: 0 });
+    const hidden = new File(["metadata"], ".DS_Store");
+    const vault = await importFolder(fileList(valid, hidden));
+
+    expect(vault.entries).toEqual([{ path: "entry.md", kind: "note", modified: 0 }]);
+  });
 });
+
+function fileList(...files: readonly File[]): FileList {
+  const list = {
+    ...files,
+    length: files.length,
+    item(index: number): File | null {
+      return files[index] ?? null;
+    },
+  } satisfies FileList;
+  return list;
+}
 
 describe("autosave", () => {
   it("never marks a newer edit saved after an older write completes", async () => {

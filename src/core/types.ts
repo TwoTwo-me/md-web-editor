@@ -12,6 +12,7 @@ export interface VaultBase {
   readonly entries: readonly VaultEntry[];
   read(path: string): Promise<FileSnapshot>;
   asset(path: string): Promise<Blob | undefined>;
+  file?(path: string): Promise<File | undefined>;
   refresh(): Promise<void>;
   close(): void;
 }
