@@ -8,6 +8,6 @@ A dedicated hostname used only for this editor is the preferred boundary for pri
 
 Removing persistent handles and plaintext drafts would reduce dormant exposure, but would not isolate a live editor window from same-origin scripts. It would also change the documented crash-recovery behavior. Such a change requires an explicit storage design and regression verification, not just a warning or a renamed database.
 
-Until the deployment boundary is settled, release evidence must identify this limitation and must not claim absolute confidentiality against other same-origin applications. All development and browser acceptance tests use synthetic notes only.
+Release evidence must identify this limitation and must not claim absolute confidentiality against other same-origin applications. All development and browser acceptance tests use synthetic notes only.
 
 2026-09-12 clarification: the owner prefers the existing GitHub.io URL. Retain that deployment. A dedicated hostname is optional additional protection against a compromised sibling site, not a prerequisite for the requested local-only editor. The earlier release-blocking interpretation was too broad; keep the actual origin limitation documented without claiming absolute isolation.

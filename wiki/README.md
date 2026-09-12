@@ -10,5 +10,6 @@ This is the source-of-truth index. Keep pages small, link decisions to implement
 - [Execution ledger](execution.md)
 - [Version and release policy](versioning.md)
 - [Verification](verification.md)
+- [0.2.0 release and acceptance](releases/0.2.0.md)
 
 All examples and QA notes are synthetic. Source notes stay on the user's device. Git tracks the application and this wiki only.
