@@ -1,4 +1,3 @@
-import type { Simulation } from "d3-force";
 import type { GraphData } from "../core/types";
 import { createGraphCanvas, svgElement } from "./canvas";
 import { groupColor } from "./filter";
@@ -8,6 +7,7 @@ import type { GraphSettings } from "./settings";
 import {
   createGraphSimulation,
   type GraphDimensions,
+  type GraphSimulation,
   type RenderEdge,
   type RenderNode,
 } from "./simulation";
@@ -42,7 +42,7 @@ type LabelMetric = {
 
 export function createGraphScene(options: SceneOptions): GraphScene {
   let paused = false;
-  let simulation: Simulation<RenderNode, undefined> | undefined;
+  let simulation: GraphSimulation | undefined;
   let nodes: RenderNode[] = [];
   let edges: RenderEdge[] = [];
   let groups: SVGGElement[] = [];
@@ -51,6 +51,7 @@ export function createGraphScene(options: SceneOptions): GraphScene {
   let hovering = "";
   let labelsVisible = true;
   let nodeScale = 1;
+  let paintNodes = (): void => {};
   const positions = new Map<string, SavedPosition>();
   const canvas = createGraphCanvas();
   const empty = document.createElement("div");
@@ -68,7 +69,7 @@ export function createGraphScene(options: SceneOptions): GraphScene {
     return { x: Math.max(1, rect.width), y: Math.max(1, rect.height) };
   };
   const reheat = () => {
-    if (!paused) simulation?.alpha(0.7).restart();
+    if (!paused) simulation?.instance.alpha(0.7).restart();
   };
   const gestures = createGraphGestures({
     svg: canvas.svg,
@@ -80,7 +81,17 @@ export function createGraphScene(options: SceneOptions): GraphScene {
       applyLabelLayout();
     },
   });
-  const resize = new ResizeObserver(reheat);
+  const resize = new ResizeObserver(() => {
+    const rect = options.stage.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    simulation?.setDimensions({ x: rect.width, y: rect.height });
+    if (paused) {
+      simulation?.centerImmediately();
+      paintNodes();
+      return;
+    }
+    reheat();
+  });
   resize.observe(options.stage);
 
   function endpoint(value: string | number | RenderNode): RenderNode | undefined {
@@ -128,7 +139,7 @@ export function createGraphScene(options: SceneOptions): GraphScene {
     });
   }
   function render(renderOptions: SceneRenderOptions): void {
-    simulation?.stop();
+    simulation?.instance.stop();
     paused = renderOptions.paused;
     active = renderOptions.active;
     nodeScale = renderOptions.settings.nodeScale;
@@ -145,7 +156,9 @@ export function createGraphScene(options: SceneOptions): GraphScene {
     const lines = edges.map(() => {
       const line = svgElement("line");
       line.setAttribute("stroke-width", String(renderOptions.settings.edgeWidth));
-      if (renderOptions.settings.arrows) line.setAttribute("marker-end", "url(#graph-arrow)");
+      if (renderOptions.settings.arrows) {
+        line.setAttribute("marker-end", `url(#${canvas.arrowMarkerId})`);
+      }
       canvas.edgeLayer.append(line);
       return line;
     });
@@ -222,7 +235,7 @@ export function createGraphScene(options: SceneOptions): GraphScene {
         if (!gestures.consumeDrag()) options.onOpen(node.id);
       });
     });
-    const paintNodes = () => {
+    paintNodes = () => {
       lines.forEach((line, index) => {
         const edge = edges[index];
         if (!edge) return;
@@ -247,9 +260,9 @@ export function createGraphScene(options: SceneOptions): GraphScene {
       settings: renderOptions.settings,
       onTick: paintNodes,
     });
-    simulation.tick();
+    simulation.instance.tick();
     paintNodes();
-    if (paused) simulation.stop();
+    if (paused) simulation.instance.stop();
   }
 
   return {
@@ -257,7 +270,7 @@ export function createGraphScene(options: SceneOptions): GraphScene {
     reheat,
     setPaused(value) {
       paused = value;
-      if (paused) simulation?.stop();
+      if (paused) simulation?.instance.stop();
       else reheat();
     },
     zoom(factor) {
@@ -271,7 +284,7 @@ export function createGraphScene(options: SceneOptions): GraphScene {
       gestures.reset();
     },
     destroy() {
-      simulation?.stop();
+      simulation?.instance.stop();
       resize.disconnect();
       gestures.destroy();
     },

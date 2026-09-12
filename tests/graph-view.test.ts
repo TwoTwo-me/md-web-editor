@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GraphData } from "../src/core/types";
 import { createGraph } from "../src/graph/graph";
+import { createGraphScene } from "../src/graph/scene";
+import { defaultGraphSettings } from "../src/graph/settings";
 
 const data: GraphData = {
   nodes: [
@@ -11,9 +13,31 @@ const data: GraphData = {
   edges: [{ source: "a.md", target: "b.md" }],
 };
 
-class TestResizeObserver {
-  observe(): void {}
+class TestResizeObserver implements ResizeObserver {
+  static readonly observers: TestResizeObserver[] = [];
+  private readonly targets = new Set<Element>();
+
+  constructor(private readonly callback: ResizeObserverCallback) {
+    TestResizeObserver.observers.push(this);
+  }
+
+  observe(target: Element): void {
+    this.targets.add(target);
+  }
+  unobserve(target: Element): void {
+    this.targets.delete(target);
+  }
   disconnect(): void {}
+
+  static resize(target: Element): void {
+    for (const observer of TestResizeObserver.observers) {
+      if (observer.targets.has(target)) observer.callback([], observer);
+    }
+  }
+
+  static reset(): void {
+    TestResizeObserver.observers.length = 0;
+  }
 }
 
 Object.defineProperty(globalThis, "ResizeObserver", { value: TestResizeObserver });
@@ -22,7 +46,11 @@ Object.defineProperty(window, "matchMedia", {
   value: () => ({ matches: false }),
 });
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.body.replaceChildren();
+  TestResizeObserver.reset();
+  vi.restoreAllMocks();
+});
 
 describe("createGraph", () => {
   it("renders keyboard navigation and releases the graph on destroy", () => {
@@ -115,5 +143,77 @@ describe("createGraph", () => {
       configurable: true,
       value: () => ({ matches: false }),
     });
+  });
+
+  it("recenters a paused graph after its detached stage receives its first size", () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const size = this.classList.contains("graph-stage") && this.isConnected ? 640 : 0;
+      return new DOMRect(0, 0, size, size ? 480 : 0);
+    });
+    const stage = document.createElement("div");
+    stage.className = "graph-stage";
+    const scene = createGraphScene({ stage, onOpen: () => {}, onReset: () => {} });
+
+    scene.render({ data, active: "a.md", settings: defaultGraphSettings, paused: true });
+    document.body.append(stage);
+    TestResizeObserver.resize(stage);
+
+    const centerOfNodes = () => {
+      const coordinates = [...stage.querySelectorAll<SVGGElement>(".graph-node")].map((node) => {
+        const transform = node.getAttribute("transform") ?? "";
+        const match = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(transform);
+        if (!match) throw new Error("expected a positioned graph node");
+        return { x: Number(match[1]), y: Number(match[2]) };
+      });
+      return coordinates.reduce(
+        (sum, point) => ({
+          x: sum.x + point.x / coordinates.length,
+          y: sum.y + point.y / coordinates.length,
+        }),
+        { x: 0, y: 0 },
+      );
+    };
+    const center = centerOfNodes();
+
+    expect(center.x).toBeCloseTo(320, 0);
+    expect(center.y).toBeCloseTo(240, 0);
+    stage.remove();
+    TestResizeObserver.resize(stage);
+    expect(centerOfNodes()).toEqual(center);
+    scene.destroy();
+  });
+
+  it("gives simultaneously mounted graph views separate arrow markers", () => {
+    const firstParent = document.createElement("div");
+    const secondParent = document.createElement("div");
+    document.body.append(firstParent, secondParent);
+    const first = createGraph({
+      parent: firstParent,
+      data,
+      active: "a.md",
+      local: false,
+      onOpen: () => {},
+    });
+    const second = createGraph({
+      parent: secondParent,
+      data,
+      active: "a.md",
+      local: false,
+      onOpen: () => {},
+    });
+    const firstMarker = firstParent.querySelector<SVGMarkerElement>("marker");
+    const secondMarker = secondParent.querySelector<SVGMarkerElement>("marker");
+
+    expect(firstMarker?.id).not.toBe(secondMarker?.id);
+    expect(firstParent.querySelector("line")?.getAttribute("marker-end")).toBe(
+      `url(#${firstMarker?.id})`,
+    );
+    expect(secondParent.querySelector("line")?.getAttribute("marker-end")).toBe(
+      `url(#${secondMarker?.id})`,
+    );
+    first.destroy();
+    second.destroy();
   });
 });

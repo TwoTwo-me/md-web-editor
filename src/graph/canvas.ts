@@ -1,4 +1,5 @@
 const svgNamespace = "http://www.w3.org/2000/svg";
+let canvasNumber = 0;
 
 export function svgElement<K extends keyof SVGElementTagNameMap>(tag: K): SVGElementTagNameMap[K] {
   return document.createElementNS(svgNamespace, tag);
@@ -9,6 +10,7 @@ export type GraphCanvas = {
   readonly viewport: SVGGElement;
   readonly edgeLayer: SVGGElement;
   readonly nodeLayer: SVGGElement;
+  readonly arrowMarkerId: string;
 };
 
 export function createGraphCanvas(): GraphCanvas {
@@ -21,7 +23,9 @@ export function createGraphCanvas(): GraphCanvas {
   );
   const defs = svgElement("defs");
   const marker = svgElement("marker");
-  marker.id = "graph-arrow";
+  const arrowMarkerId = `graph-arrow-${canvasNumber}`;
+  canvasNumber += 1;
+  marker.id = arrowMarkerId;
   marker.setAttribute("viewBox", "0 -5 10 10");
   marker.setAttribute("refX", "14");
   marker.setAttribute("refY", "0");
@@ -38,5 +42,5 @@ export function createGraphCanvas(): GraphCanvas {
   const nodeLayer = svgElement("g");
   viewport.append(edgeLayer, nodeLayer);
   svg.append(defs, viewport);
-  return { svg, viewport, edgeLayer, nodeLayer };
+  return { svg, viewport, edgeLayer, nodeLayer, arrowMarkerId };
 }
