@@ -56,7 +56,7 @@ const NodeSchema: z.ZodType<RawNode> = z.lazy(() =>
         kind: z.literal("split"),
         id: z.string().min(1),
         axis: z.union([z.literal("horizontal"), z.literal("vertical")]),
-        ratio: z.number().finite(),
+        ratio: z.number().finite().min(0.15).max(0.85),
         first: NodeSchema,
         second: NodeSchema,
       })

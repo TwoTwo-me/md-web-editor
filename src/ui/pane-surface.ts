@@ -39,6 +39,13 @@ function appendInOrder(parent: HTMLElement, children: readonly HTMLElement[]): v
   }
 }
 
+function splitHandle(split: HTMLElement): HTMLElement | undefined {
+  return [...split.children].find(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement && child.classList.contains("pane-separator"),
+  );
+}
+
 export function createPaneSurface(options: PaneSurfaceOptions): {
   readonly render: () => void;
   readonly destroy: () => void;
@@ -97,7 +104,7 @@ export function createPaneSurface(options: PaneSurfaceOptions): {
       "pane-node--contains-active",
       contains(node, options.layout.activeGroup),
     );
-    const handle = split.querySelector<HTMLElement>(".pane-separator");
+    const handle = splitHandle(split);
     if (!handle) throw new Error("Pane split is missing its separator.");
     handle.setAttribute("aria-valuenow", String(Math.round(node.ratio * 100)));
     appendInOrder(split, [nodeDom(node.first), handle, nodeDom(node.second)]);

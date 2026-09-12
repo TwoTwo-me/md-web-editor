@@ -186,4 +186,42 @@ describe("PaneLayout", () => {
 
     expect(layout.restore(duplicate, ["a.md"])).toBe(false);
   });
+
+  it.each([-1, 0, 0.14, 0.86, 1, 2])("rejects restored split ratio %s", (ratio) => {
+    const layout = new PaneLayout();
+    const snapshot = {
+      version: 1,
+      root: {
+        kind: "split",
+        id: "split",
+        axis: "horizontal",
+        ratio,
+        first: { kind: "group", id: "first", tabs: ["a"], active: "a" },
+        second: { kind: "group", id: "second", tabs: ["b"], active: "b" },
+      },
+      tabs: [note("a"), note("b")],
+      activeGroup: "first",
+    };
+
+    expect(layout.restore(snapshot, ["a.md", "b.md"])).toBe(false);
+  });
+
+  it.each([0.15, 0.85])("restores split ratio boundary %s", (ratio) => {
+    const layout = new PaneLayout();
+    const snapshot = {
+      version: 1,
+      root: {
+        kind: "split",
+        id: "split",
+        axis: "horizontal",
+        ratio,
+        first: { kind: "group", id: "first", tabs: ["a"], active: "a" },
+        second: { kind: "group", id: "second", tabs: ["b"], active: "b" },
+      },
+      tabs: [note("a"), note("b")],
+      activeGroup: "first",
+    };
+
+    expect(layout.restore(snapshot, ["a.md", "b.md"])).toBe(true);
+  });
 });

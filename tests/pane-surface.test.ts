@@ -173,7 +173,7 @@ describe("pane surface", () => {
     expect(document.querySelectorAll(".pane-split")).toHaveLength(0);
   });
 
-  it("reconciles nested splits without losing their separators", () => {
+  it("keeps nested split handles and content hosts after a mode render", () => {
     const value = subject();
     const first = value.layout.groups()[0]?.id;
     if (!first) throw new Error("Test first group is missing.");
@@ -181,8 +181,19 @@ describe("pane surface", () => {
     value.layout.add(note("c"), first);
     value.layout.move("c", { group: first, position: "right" });
     value.surface.render();
+    value.modes.set("c", "source");
+    value.surface.render();
 
-    expect(document.querySelectorAll(".pane-split")).toHaveLength(2);
-    expect(document.querySelectorAll(".pane-separator")).toHaveLength(2);
+    const splits = document.querySelectorAll<HTMLElement>(".pane-split");
+
+    expect(splits).toHaveLength(2);
+    for (const split of splits) {
+      const handles = [...split.children].filter(
+        (child) => child instanceof HTMLElement && child.classList.contains("pane-separator"),
+      );
+      expect(handles).toHaveLength(1);
+      expect(handles[0]?.getAttribute("aria-orientation")).toBe("vertical");
+    }
+    expect([...value.content.values()].every((host) => host.isConnected)).toBe(true);
   });
 });
