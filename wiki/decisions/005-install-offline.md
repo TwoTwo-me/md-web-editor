@@ -1,0 +1,13 @@
+# ADR 005: Installed offline application
+
+Status: implementation verified locally; release acceptance pending.
+
+Use Chrome's native Progressive Web App installation rather than a separate desktop package. The build emits a manifest with a stable deployment-path `id`, relative `start_url` and `scope`, `standalone` display, Korean description and the existing replaceable boxed `.md` identity. Relative `id` resolves against the origin rather than the manifest directory, so the explicit base path is intentional. No private filenames, machine paths, user IDs or tracking parameters enter application URLs or metadata.
+
+The 192px and 512px PNG sources live in `public/icons/`. The build embeds their bytes as PNG data URLs in the manifest. Chrome installation and icon recognition were observed with the existing `img-src blob: data:` policy, so there is no need to widen image permissions to every same-origin path. To replace the icons, update those PNGs and rebuild. Native installation UI and window decorations belong to Chrome.
+
+The existing service worker atomically precaches the explicit application asset list, now including the manifest and icons. It serves only allowlisted application assets from cache. Folder files are accessed through the user's local file handles; they are never HTTP requests or application-cache entries. The welcome help tracks installation state and reports initial cache failure when the worker becomes redundant. The save-before-update flow remains explicit; the worker does not unconditionally skip waiting or claim existing clients.
+
+After a successful initial online download, a new app window can start and use local folders without a connection. Online access is required for first installation and later application updates. The operating system and browser may make their own requests while connected; offline capability does not disable Chrome's network behavior. Permissions may need to be granted again. Read-only imports are in memory and must be selected again after restart. Cache, drafts, preferences and layout metadata remain browser storage and can be cleared or evicted; original selected-folder files are independent of that storage.
+
+References checked 2026-09-13: [Chrome install criteria](https://web.dev/articles/install-criteria), [manifest icon CSP](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/icons), [manifest identity](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/id), [service worker lifecycle](https://web.dev/articles/service-worker-lifecycle), [storage eviction](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria).
