@@ -102,6 +102,12 @@ export function showSettings(): void {
   controlSpace.input.addEventListener("change", () => enforcePrefix(controlSpace.input));
 
   const themeSettings = createThemeSettings();
+  const allFiles = checkField("모든 파일을 링크 대상으로 표시", preferences.linkAllFiles);
+  const fileHelp = element(
+    "p",
+    "muted",
+    "탐색기와 위키 링크 자동완성에 모든 파일 형식을 표시합니다. 링크는 연 폴더의 루트 기준으로 저장합니다.",
+  );
 
   const info = element(
     "p",
@@ -124,6 +130,7 @@ export function showSettings(): void {
         lineWidth: Number(width.input.value),
         prefixEscape: escapePrefix.input.checked,
         prefixControlSpace: controlSpace.input.checked,
+        linkAllFiles: allFiles.input.checked,
       });
       if (!result.saved) {
         info.textContent = "설정을 저장하지 못했습니다. 브라우저 저장소 권한을 확인하세요.";
@@ -140,6 +147,8 @@ export function showSettings(): void {
     escapePrefix.wrap,
     controlSpace.wrap,
     constraint,
+    allFiles.wrap,
+    fileHelp,
     ...themeSettings.nodes,
     info,
     privacy,

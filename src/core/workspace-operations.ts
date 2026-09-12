@@ -1,5 +1,5 @@
 import { indexDocument, resolveLink } from "../editor/markdown";
-import { normalizePath } from "../storage/paths";
+import { isNotePath, normalizePath } from "../storage/paths";
 import { showChoices } from "../ui/commands";
 import { askText, openDialog } from "../ui/dialog";
 import { element } from "../ui/dom";
@@ -18,10 +18,9 @@ export async function followGraphNode(workspace: Workspace, id: string): Promise
         run: () => workspace.run(() => workspace.open(path)),
       })),
     );
-  } else if (node.kind === "missing") createWorkspaceNote(workspace, node.id);
+  } else if (node.kind === "missing") openMissingTarget(workspace, node.id);
   else if (node.kind === "note") await workspace.open(node.id);
-  else if (node.kind === "asset")
-    workspace.notice("이미지 첨부는 노트 안에서 미리 볼 수 있습니다.");
+  else if (node.kind === "asset") await workspace.open(node.id);
 }
 
 export async function followWorkspaceLink(
@@ -73,11 +72,7 @@ export async function followWorkspaceLink(
     return;
   }
   if (result.kind === "missing") {
-    createWorkspaceNote(workspace, result.path);
-    return;
-  }
-  if (workspace.vault?.entries.find((entry) => entry.path === result.path)?.kind === "asset") {
-    workspace.notice("이미지 첨부는 노트 안에서 미리 볼 수 있습니다.");
+    openMissingTarget(workspace, result.path);
     return;
   }
   await workspace.open(result.path);
@@ -92,6 +87,11 @@ export async function followWorkspaceLink(
     const line = note.content.split("\n").findIndex((text) => text.trimEnd().endsWith(anchor));
     if (line >= 0) workspace.sessions?.current()?.editor.goToLine(line + 1);
   }
+}
+
+function openMissingTarget(workspace: Workspace, path: string): void {
+  if (isNotePath(path)) createWorkspaceNote(workspace, path);
+  else workspace.notice(`파일을 찾지 못했습니다: ${path}. 폴더를 새로고침해 보세요.`);
 }
 
 export function createWorkspaceNote(workspace: Workspace, initial = "새 노트.md"): void {

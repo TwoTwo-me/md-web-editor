@@ -2,14 +2,18 @@ import type { Workspace } from "../core/workspace";
 import { button, element, iconButton } from "./dom";
 import { renderExplorer } from "./explorer";
 import { renderInspector } from "./inspector";
+import { getPreferences } from "./theme";
 export function renderWorkspace(app: Workspace) {
   const { shell, sessions } = app;
   const active = sessions?.active ?? "";
   const notes = [...app.notes.values()];
-  renderExplorer(shell.tree, notes, active, shell.search.value, (path) =>
+  const files = getPreferences().linkAllFiles
+    ? (app.vault?.entries.map((entry) => app.notes.get(entry.path) ?? { path: entry.path }) ?? [])
+    : notes;
+  renderExplorer(shell.tree, files, active, shell.search.value, (path) =>
     app.run(() => app.open(path)),
   );
-  shell.treeLabel.textContent = `${shell.search.value ? "검색 결과" : "파일"}  ·  ${notes.length}`;
+  shell.treeLabel.textContent = `${shell.search.value ? "검색 결과" : "파일"}  ·  ${files.length}`;
   shell.tabs.replaceChildren();
   for (const session of sessions?.items.values() ?? []) {
     const tab = element(

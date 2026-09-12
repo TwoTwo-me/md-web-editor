@@ -24,6 +24,7 @@ export type Preferences = Readonly<{
   lineWidth: number;
   prefixEscape: boolean;
   prefixControlSpace: boolean;
+  linkAllFiles: boolean;
 }>;
 export type ThemeDefinition = Readonly<{
   version: 1;
@@ -39,6 +40,7 @@ export const preferencesSchema = z
     lineWidth: z.number().int().min(520).max(1100).default(740),
     prefixEscape: z.boolean().default(true),
     prefixControlSpace: z.boolean().default(true),
+    linkAllFiles: z.boolean().default(false),
   })
   .strict();
 
@@ -77,6 +79,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   lineWidth: 740,
   prefixEscape: true,
   prefixControlSpace: true,
+  linkAllFiles: false,
 };
 
 export const BUILTIN_THEME: ThemeDefinition = {

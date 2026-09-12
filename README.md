@@ -18,6 +18,8 @@ Remote images, active HTML and network resources embedded in notes are blocked. 
 
 See the [project wiki](wiki/README.md), [product contract](wiki/product.md), [privacy decision](wiki/decisions/001-local-data.md) and [design system](DESIGN.md). Deployment and verification results are recorded in the wiki as they are observed.
 
-The current project-path deployment is a test candidate. GitHub Pages projects under one account share browser storage and permissions; private vault use needs a hostname dedicated to this editor. See [origin isolation](wiki/decisions/003-origin-isolation.md) for the pending deployment decision.
+The editor uses the existing GitHub.io address. Other Pages projects under the same account share its browser-storage origin. A dedicated hostname is an optional extra isolation boundary; it is not required for local editing or no-upload operation. See [origin isolation](wiki/decisions/003-origin-isolation.md).
 
 To bundle a theme, add a schema-compatible JSON file to `public/themes/` and rebuild. Each file appears in Settings without a runtime request; `builtin` and `custom` are reserved names. Use the provided Quiet Violet file as a template.
+
+**All-file links:** enable “모든 파일을 링크 대상으로 표시” in Settings to include PDF, text, office, archive and other file types in discovery and wiki completion. New wiki links save as `[[/folder/file.ext|label]]`, rooted at your selected folder. File links open a safe local preview or offer a download; HTML/SVG are shown as text, and operating-system apps are not launched by the website. Existing notes are not rewritten just by opening them.

@@ -2,7 +2,7 @@ import type { Workspace } from "../core/workspace";
 import { createDemoVault, importFolder, openFolder } from "../storage/vault";
 import { type Command, installCommands, showChoices } from "./commands";
 import { button, download, element, iconButton } from "./dom";
-import { showSettings, toggleTheme } from "./theme";
+import { getPreferences, showSettings, toggleTheme } from "./theme";
 export function bindAppActions(app: Workspace) {
   const { shell } = app;
   const pick = () =>
@@ -36,10 +36,12 @@ export function bindAppActions(app: Workspace) {
   const quick = () =>
     showChoices(
       "노트 빠른 전환",
-      [...app.notes.values()].map((note) => ({
-        label: note.path,
-        run: () => app.run(() => app.open(note.path)),
-      })),
+      (app.vault?.entries ?? [])
+        .filter((entry) => entry.kind === "note" || getPreferences().linkAllFiles)
+        .map((note) => ({
+          label: note.path,
+          run: () => app.run(() => app.open(note.path)),
+        })),
     );
   const format = (kind: "bold" | "italic" | "link" | "code" | "heading" | "task" | "quote") =>
     app.sessions?.current()?.editor.format(kind);

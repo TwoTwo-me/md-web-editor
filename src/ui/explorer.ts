@@ -1,8 +1,8 @@
-import type { Note } from "../core/types";
 import { button, element } from "./dom";
+export type ExplorerFile = { readonly path: string; readonly content?: string };
 export function renderExplorer(
   parent: HTMLElement,
-  notes: readonly Note[],
+  notes: readonly ExplorerFile[],
   active: string,
   query: string,
   onOpen: (path: string) => void,
@@ -17,7 +17,7 @@ export function renderExplorer(
     (n) =>
       !needle ||
       n.path.toLocaleLowerCase().includes(needle) ||
-      n.content.toLocaleLowerCase().includes(needle),
+      n.content?.toLocaleLowerCase().includes(needle),
   );
   const folders = new Map<string, HTMLElement>();
   folders.set("", parent);

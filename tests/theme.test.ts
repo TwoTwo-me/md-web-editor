@@ -73,6 +73,7 @@ describe("theme and preferences boundaries", () => {
       lineWidth: 740,
       prefixEscape: true,
       prefixControlSpace: true,
+      linkAllFiles: false,
     });
   });
 

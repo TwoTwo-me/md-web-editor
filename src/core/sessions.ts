@@ -3,6 +3,7 @@ import { resolveLink } from "../editor/markdown";
 import { type Autosave, createAutosave, type SaveStatus } from "../storage/autosave";
 import { type Draft, discardDraft, discardSpecificDraft, readDraft } from "../storage/journal";
 import { element } from "../ui/dom";
+import { getPreferences } from "../ui/theme";
 import { discardSavedRecovery, offerRecovery } from "./session-recovery";
 import { showSaveDialog } from "./session-save-dialog";
 import type { EditorMode, FileSnapshot, NoteEditor, NoteLink, Vault } from "./types";
@@ -94,8 +95,12 @@ export class Sessions {
           this.options.onChange(path, value);
         },
         onLink: this.options.onLink,
-        completions: () =>
-          this.options.vault.entries.filter((e) => e.kind === "note").map((e) => e.path),
+        completions: () => {
+          const allFiles = getPreferences().linkAllFiles;
+          return this.options.vault.entries
+            .filter((entry) => entry.kind === "note" || allFiles)
+            .map((entry) => entry.path);
+        },
         asset: async (target) => {
           const r = resolveLink(
             path,

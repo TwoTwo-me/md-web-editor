@@ -1,4 +1,5 @@
 import { createGraph, type GraphView } from "../graph/graph";
+import { showAttachment } from "../ui/attachment";
 import { appendNotice, button, element } from "../ui/dom";
 import type { Shell } from "../ui/shell";
 import { renderWorkspace } from "../ui/workspace-view";
@@ -34,6 +35,7 @@ export class Workspace {
     });
     shell.search.addEventListener("input", () => this.render());
     shell.saveState.addEventListener("click", () => this.sessions?.saveDialog());
+    document.addEventListener("preferences-changed", () => this.render());
   }
   run(action: () => Promise<unknown>) {
     void action().catch((cause: unknown) => this.report(cause));
@@ -136,6 +138,10 @@ export class Workspace {
     return this.generation;
   }
   async open(path: string) {
+    if (this.vault?.entries.find((entry) => entry.path === path)?.kind === "asset") {
+      await showAttachment(this.vault, path);
+      return;
+    }
     if (!this.sessions) return;
     const token = ++this.openGeneration;
     if (!(await this.sessions.open(path))) {
