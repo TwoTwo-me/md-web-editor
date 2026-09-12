@@ -28,21 +28,12 @@ export function createShell(root: HTMLElement) {
   const vaultFooter = element("div", "vault-footer");
   explorer.append(vaultHeader, search, treeLabel, tree, vaultFooter);
   const main = element("main", "main-panel");
-  const tabs = element("nav", "tabs");
-  tabs.setAttribute("aria-label", "열린 노트");
-  const toolbar = element("div", "toolbar");
-  const toolbarLeft = element("div", "toolbar-left");
-  const breadcrumbs = element("span", "breadcrumbs", "작업 공간");
-  const modeTools = element("div", "inline-actions");
-  toolbarLeft.append(breadcrumbs);
-  toolbar.append(toolbarLeft, modeTools);
-  const canvas = element("div", "workspace-canvas");
+  const panes = element("div", "workspace-panes");
+  panes.hidden = true;
   const documents = element("div", "documents");
-  const graph = element("div", "graph-host");
-  graph.hidden = true;
+  documents.hidden = true;
   const welcome = element("div", "welcome");
-  canvas.append(welcome, documents, graph);
-  main.append(tabs, toolbar, canvas);
+  main.append(welcome, panes, documents);
   const inspector = element("aside", "inspector");
   inspector.setAttribute("aria-label", "노트 정보");
   const status = element("footer", "status-bar");
@@ -55,10 +46,6 @@ export function createShell(root: HTMLElement) {
   status.append(saveState, metrics, prefix);
   shell.append(rail, explorer, main, inspector, status);
   root.append(shell);
-  const leftToggle = iconButton("파일 탐색기 표시", "☰", () =>
-    shell.classList.toggle("hide-explorer"),
-  );
-  toolbarLeft.prepend(leftToggle);
   installResize(explorer, "--left-width", 180, 440, false);
   installResize(inspector, "--right-width", 220, 460, true);
   return {
@@ -71,12 +58,9 @@ export function createShell(root: HTMLElement) {
     treeLabel,
     tree,
     vaultFooter,
-    tabs,
-    breadcrumbs,
-    modeTools,
+    panes,
     welcome,
     documents,
-    graph,
     inspector,
     saveState,
     metrics,

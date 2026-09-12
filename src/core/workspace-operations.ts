@@ -29,6 +29,7 @@ export async function followWorkspaceLink(
   kind?: NoteLink["kind"],
 ): Promise<void> {
   const source = workspace.sessions?.active ?? "";
+  const sourceGroup = workspace.panes.layout.activeGroup;
   const result =
     kind === undefined && workspace.notes.has(target)
       ? { kind: "note" as const, path: target, anchor: "" }
@@ -66,7 +67,7 @@ export async function followWorkspaceLink(
       "같은 이름의 노트",
       result.paths.map((path) => ({
         label: path,
-        run: () => workspace.run(() => workspace.open(path)),
+        run: () => workspace.run(() => workspace.open(path, sourceGroup)),
       })),
     );
     return;
@@ -75,17 +76,20 @@ export async function followWorkspaceLink(
     openMissingTarget(workspace, result.path);
     return;
   }
-  await workspace.open(result.path);
+  await workspace.open(result.path, sourceGroup);
   if (!result.anchor) return;
+  const group = workspace.panes.layout.group(sourceGroup);
+  const view = group?.active && workspace.sessions?.views.get(group.active);
+  if (!view || view.path !== result.path) return;
   const note = workspace.notes.get(result.path);
   const anchor = result.anchor.replace(/^#/, "");
   const heading =
     note &&
     indexDocument(note.content).headings.find((item) => item.id === anchor || item.text === anchor);
-  if (heading) workspace.sessions?.current()?.editor.goToLine(heading.line);
+  if (heading) view.editor.goToLine(heading.line);
   else if (note && anchor.startsWith("^")) {
     const line = note.content.split("\n").findIndex((text) => text.trimEnd().endsWith(anchor));
-    if (line >= 0) workspace.sessions?.current()?.editor.goToLine(line + 1);
+    if (line >= 0) view.editor.goToLine(line + 1);
   }
 }
 
@@ -96,6 +100,7 @@ function openMissingTarget(workspace: Workspace, path: string): void {
 
 export function createWorkspaceNote(workspace: Workspace, initial = "새 노트.md"): void {
   const vault = workspace.vault;
+  const group = workspace.panes.layout.activeGroup;
   if (!vault) {
     workspace.notice("먼저 폴더 또는 예제 공간을 여세요.");
     return;
@@ -115,9 +120,9 @@ export function createWorkspaceNote(workspace: Workspace, initial = "새 노트.
     await vault.refresh();
     if (vault !== workspace.vault) return;
     workspace.notes.set(path, { path, content: snapshot.content });
-    await workspace.open(path);
+    await workspace.open(path, workspace.panes.layout.group(group) ? group : undefined);
     workspace.render();
-    workspace.graphView?.update(workspace.graphData(), path);
+    workspace.panes.updateGraphs();
   });
 }
 
@@ -146,13 +151,12 @@ export async function refreshWorkspace(workspace: Workspace): Promise<void> {
     if (token !== workspace.version() || vault !== workspace.vault) return;
     workspace.notes.clear();
     for (const [path, note] of next) workspace.notes.set(path, note);
-    if (!sessions?.active) {
-      const next = [...(sessions?.items.keys() ?? [])].at(-1);
-      if (next) await workspace.open(next);
-      else workspace.showEmpty();
-    }
+    for (const tab of [...workspace.panes.layout.tabs.values()])
+      if (tab.kind === "note" && !sessions?.views.has(tab.id)) workspace.panes.layout.close(tab.id);
+    const active = workspace.panes.layout.group()?.active;
+    if (active) workspace.panes.select(active, false);
     workspace.render();
-    workspace.graphView?.update(workspace.graphData(), sessions?.active ?? "");
+    workspace.panes.updateGraphs();
     workspace.notice("폴더의 변경 내용을 확인했습니다.");
   } finally {
     release();

@@ -1,29 +1,23 @@
-import { createGraph, type GraphView } from "../graph/graph";
 import { showAttachment } from "../ui/attachment";
-import { appendNotice, button, element } from "../ui/dom";
+import { appendNotice, element } from "../ui/dom";
 import type { Shell } from "../ui/shell";
 import { renderWorkspace } from "../ui/workspace-view";
 import { buildGraph } from "./graph-data";
 import { Sessions } from "./sessions";
 import type { EditorMode, Note, NoteLink, Vault } from "./types";
 import { initialWorkspaceNote, readWorkspaceNotes } from "./workspace-data";
-import {
-  createWorkspaceNote,
-  followGraphNode,
-  followWorkspaceLink,
-  refreshWorkspace,
-} from "./workspace-operations";
+import { createWorkspaceNote, followWorkspaceLink, refreshWorkspace } from "./workspace-operations";
+import { WorkspacePanes } from "./workspace-panes";
 export class Workspace {
   vault: Vault | undefined;
   sessions: Sessions | undefined;
   readonly notes = new Map<string, Note>();
-  graphView: GraphView | undefined;
-  graphVisible = false;
+  readonly panes: WorkspacePanes;
   private generation = 0;
-  private openGeneration = 0;
   private indexTimer: ReturnType<typeof setTimeout> | undefined;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   constructor(readonly shell: Shell) {
+    this.panes = new WorkspacePanes(this);
     window.addEventListener("beforeunload", (event) => {
       if (this.sessions?.pending()) {
         event.preventDefault();
@@ -87,8 +81,7 @@ export class Workspace {
         return;
       }
       this.sessions?.destroy();
-      this.graphView?.destroy();
-      this.graphView = undefined;
+      this.panes.reset();
       this.vault?.close();
       this.vault = vault;
       this.notes.clear();
@@ -99,18 +92,21 @@ export class Workspace {
         onChange: (path, content) => this.changed(path, content),
         onStatus: () => this.renderStatus(),
         onLink: (target, kind) => this.run(() => this.follow(target, kind)),
+        onFocus: (id) => this.panes.onEditorFocus(id),
       });
-      this.graphVisible = false;
       this.shell.search.value = "";
       this.shell.vaultName.textContent = vault.name;
       this.shell.vaultName.title = vault.name;
       this.shell.welcome.hidden = true;
-      this.shell.documents.hidden = false;
-      this.shell.graph.hidden = true;
       this.render();
-      const first = initialWorkspaceNote(notes);
-      if (first) await this.open(first.path);
-      else this.showEmpty();
+      const restored = await this.panes.restore();
+      if (token !== this.generation) return;
+      if (!restored) {
+        const first = initialWorkspaceNote(notes);
+        if (first) await this.open(first.path);
+        else this.showEmpty();
+      }
+      if (token !== this.generation) return;
       this.notice(
         vault.kind === "folder"
           ? "로컬 폴더를 열었습니다. 변경 내용은 원본 파일에 자동 저장됩니다."
@@ -128,7 +124,7 @@ export class Workspace {
     clearTimeout(this.indexTimer);
     this.indexTimer = setTimeout(() => {
       this.render();
-      if (this.graphView) this.graphView.update(this.graphData(), this.sessions?.active ?? "");
+      this.panes.updateGraphs();
     }, 220);
   }
   graphData() {
@@ -137,24 +133,12 @@ export class Workspace {
   version() {
     return this.generation;
   }
-  async open(path: string) {
+  async open(path: string, group?: string) {
     if (this.vault?.entries.find((entry) => entry.path === path)?.kind === "asset") {
       await showAttachment(this.vault, path);
       return;
     }
-    if (!this.sessions) return;
-    const token = ++this.openGeneration;
-    if (!(await this.sessions.open(path))) {
-      if (token !== this.openGeneration) return;
-      this.sessions.saveDialog();
-      return;
-    }
-    this.graphVisible = false;
-    this.shell.graph.hidden = true;
-    this.shell.documents.hidden = false;
-    this.shell.welcome.hidden = true;
-    if (innerWidth <= 760) this.shell.shell.classList.add("hide-explorer");
-    this.render();
+    await this.panes.open(path, group);
   }
   async follow(target: string, kind?: NoteLink["kind"]) {
     await followWorkspaceLink(this, target, kind);
@@ -177,60 +161,27 @@ export class Workspace {
     await refreshWorkspace(this);
   }
   showGraph(local = false) {
-    if (!this.vault) {
-      this.notice("폴더 또는 예제 공간을 먼저 여세요.");
-      return;
-    }
-    this.graphVisible = true;
-    this.shell.documents.hidden = true;
-    this.shell.welcome.hidden = true;
-    this.shell.graph.hidden = false;
-    if (this.graphView) {
-      this.graphView.setLocal(local);
-      this.graphView.update(this.graphData(), this.sessions?.active ?? "");
-    } else
-      this.graphView = createGraph({
-        parent: this.shell.graph,
-        data: this.graphData(),
-        active: this.sessions?.active ?? "",
-        onOpen: (id) => this.run(() => followGraphNode(this, id)),
-        local,
-      });
-    this.render();
+    this.panes.showGraph(local);
   }
   mode(mode?: EditorMode) {
     const current = this.sessions?.mode ?? "live";
     const next =
       mode ?? (current === "live" ? "source" : current === "source" ? "reading" : "live");
-    this.sessions?.setMode(next);
-    if (this.graphVisible && this.sessions?.active)
-      this.run(() => this.open(this.sessions?.active ?? ""));
-    this.render();
+    const tab = this.panes.layout.activeTab();
+    if (tab) this.panes.mode(tab.id, next);
   }
-  async closeTab(path = this.sessions?.active ?? "") {
-    if (!(await this.sessions?.close(path))) {
-      this.sessions?.saveDialog();
-      return;
-    }
-    const next = [...(this.sessions?.items.keys() ?? [])].at(-1);
-    if (next) await this.open(next);
-    else this.showEmpty();
-    this.render();
+  async closeTab() {
+    await this.panes.close();
   }
   nextTab(direction: number) {
-    const paths = [...(this.sessions?.items.keys() ?? [])];
-    const index = paths.indexOf(this.sessions?.active ?? "");
-    const path = paths[(index + direction + paths.length) % paths.length];
-    if (path) this.run(() => this.open(path));
+    this.panes.next(direction);
   }
   showEmpty() {
-    this.shell.documents.hidden = true;
-    this.shell.welcome.hidden = false;
-    this.shell.welcome.replaceChildren(
-      element("h1", "", "새로운 생각을 적어 보세요."),
-      element("p", "", "폴더는 준비되었습니다. 새 노트로 시작하거나 그래프에서 연결을 살펴보세요."),
-      button("새 노트", () => this.createNote(), "button primary"),
-    );
+    this.render();
+  }
+  editor() {
+    const tab = this.panes.layout.activeTab();
+    return tab?.kind === "note" ? this.sessions?.views.get(tab.id)?.editor : undefined;
   }
   render() {
     renderWorkspace(this);

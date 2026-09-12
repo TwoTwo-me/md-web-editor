@@ -3,6 +3,8 @@ import "./styles/tokens.css";
 import "./styles/shell.css";
 import "./styles/editor.css";
 import "./styles/graph.css";
+import "./styles/panes.css";
+import "./styles/pane-menu.css";
 import { Workspace } from "./core/workspace";
 import { bindAppActions } from "./ui/app-actions";
 import { createShell } from "./ui/shell";

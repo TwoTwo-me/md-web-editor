@@ -2,7 +2,7 @@ import { button, element, labeledInput } from "./dom";
 
 let active: HTMLDialogElement | undefined;
 export function hasDialog(): boolean {
-  return active?.open ?? false;
+  return (active?.open ?? false) || document.querySelector('[role="menu"][data-open]') !== null;
 }
 export function openDialog(title: string) {
   active?.close();
@@ -56,7 +56,11 @@ export function askText(
       void onSubmit(input.value)
         .then(() => {
           dialog.close();
-          document.querySelector<HTMLElement>(".document-host:not([hidden]) .cm-content")?.focus();
+          document
+            .querySelector<HTMLElement>(
+              ".pane-group.is-focused .document-host:not([hidden]) .cm-content",
+            )
+            ?.focus();
         })
         .catch((cause: unknown) => {
           error.textContent =

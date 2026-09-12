@@ -44,7 +44,7 @@ export function bindAppActions(app: Workspace) {
         })),
     );
   const format = (kind: "bold" | "italic" | "link" | "code" | "heading" | "task" | "quote") =>
-    app.sessions?.current()?.editor.format(kind);
+    app.editor()?.format(kind);
   const commands: Command[] = [
     { key: "p", label: "명령 팔레트", run: () => controller.palette() },
     { key: "o", label: "빠른 전환", run: quick },
@@ -61,15 +61,33 @@ export function bindAppActions(app: Workspace) {
     { key: "h", label: "제목", run: () => format("heading") },
     { key: "x", label: "할 일", run: () => format("task") },
     { key: "q", label: "인용", run: () => format("quote") },
-    { key: "z", label: "실행 취소", run: () => app.sessions?.current()?.editor.undo() },
-    { key: "y", label: "다시 실행", run: () => app.sessions?.current()?.editor.redo() },
-    { key: "/", label: "노트 안에서 찾기", run: () => app.sessions?.current()?.editor.find() },
+    { key: "z", label: "실행 취소", run: () => app.editor()?.undo() },
+    { key: "y", label: "다시 실행", run: () => app.editor()?.redo() },
+    { key: "/", label: "노트 안에서 찾기", run: () => app.editor()?.find() },
     { key: "s", label: "지금 저장", run: () => app.run(() => app.canLeave()) },
     { key: "t", label: "테마 전환", run: toggleTheme },
     { key: ",", label: "설정", run: showSettings },
     { key: "[", label: "이전 탭", run: () => app.nextTab(-1) },
     { key: "]", label: "다음 탭", run: () => app.nextTab(1) },
     { key: "w", label: "탭 닫기", run: () => app.run(() => app.closeTab()) },
+    { key: "r", label: "오른쪽에 그래프 열기", run: () => app.panes.graphRight() },
+    {
+      key: "v",
+      label: "오른쪽 분할",
+      run: () => {
+        const tab = app.panes.layout.activeTab();
+        if (tab) app.run(() => app.panes.duplicate(tab.id, "right"));
+      },
+    },
+    {
+      key: "j",
+      label: "아래쪽 분할",
+      run: () => {
+        const tab = app.panes.layout.activeTab();
+        if (tab) app.run(() => app.panes.duplicate(tab.id, "bottom"));
+      },
+    },
+    { key: "3", label: "다음 패널", run: () => app.panes.nextGroup() },
     { key: "1", label: "파일 패널", run: () => shell.shell.classList.toggle("hide-explorer") },
     {
       key: "2",
@@ -132,8 +150,10 @@ export function bindAppActions(app: Workspace) {
     element("span", "version", `md-web-editor ${__APP_VERSION__} · ${__BUILD_SHA__}`),
   );
   const exportButton = iconButton("현재 노트 내려받기", "↓", () => {
-    const s = app.sessions?.current();
-    if (s) download(s.path.split("/").at(-1) ?? "note.md", s.editor.getContent());
+    const tab = app.panes.layout.activeTab();
+    const editor = app.editor();
+    if (tab?.kind === "note" && editor)
+      download(tab.path.split("/").at(-1) ?? "note.md", editor.getContent());
     else app.notice("먼저 노트를 여세요.");
   });
   shell.railBottom.prepend(exportButton);
