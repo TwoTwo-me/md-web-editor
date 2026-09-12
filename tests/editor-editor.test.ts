@@ -62,7 +62,7 @@ describe("CodeMirror editor modes", () => {
     });
     const surface = parent.querySelector<HTMLElement>(".cm-editor");
     const view = surface ? EditorView.findFromDOM(surface) : null;
-    if (!view) throw new Error("Expected CodeMirror editor");
+    if (!surface || !view) throw new Error("Expected CodeMirror editor");
     view.dispatch({ selection: { anchor: 0, head: "설명서".length } });
     editor.format("link");
     expect(editor.getContent()).toBe("[[/자료/설명서.pdf|설명서]]");
@@ -142,6 +142,47 @@ describe("CodeMirror editor modes", () => {
       annotations: Transaction.userEvent.of("input.type"),
     });
     expect(editor.getContent()).toBe("[[/draft.md|draft]]");
+    editor.destroy();
+  });
+
+  it("preserves a composing alias and anchor until a normal input closes a new Korean link", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "[[초안#소개|별칭]]",
+      readonly: false,
+      mode: "source",
+      path: "notes/current.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => ["자료/한글.md"],
+    });
+    const surface = parent.querySelector<HTMLElement>(".cm-editor");
+    const view = surface ? EditorView.findFromDOM(surface) : null;
+    if (!surface || !view) throw new Error("Expected CodeMirror editor");
+    view.dispatch({
+      changes: { from: 2, to: 4, insert: "한글" },
+      annotations: Transaction.userEvent.of("input.type.compose"),
+    });
+    expect(editor.getContent()).toBe("[[한글#소개|별칭]]");
+    editor.setDocument("[[", "notes/current.md");
+    const composingView = EditorView.findFromDOM(surface);
+    if (!composingView) throw new Error("Expected CodeMirror editor");
+    composingView.dispatch({
+      changes: { from: 2, insert: "한글" },
+      annotations: Transaction.userEvent.of("input.type.compose"),
+    });
+    expect(editor.getContent()).toBe("[[한글");
+    composingView.dispatch({
+      changes: { from: editor.getContent().length, insert: "]]" },
+      annotations: Transaction.userEvent.of("input.type"),
+    });
+    expect(editor.getContent()).toBe("[[/자료/한글.md|한글]]");
+    editor.undo();
+    expect(editor.getContent()).toBe("[[");
+    editor.redo();
+    expect(editor.getContent()).toBe("[[/자료/한글.md|한글]]");
     editor.destroy();
   });
 

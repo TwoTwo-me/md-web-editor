@@ -37,7 +37,12 @@ function wikiCanonicalization(
   completions: () => readonly string[],
 ): ReturnType<typeof EditorState.transactionFilter.of> {
   return EditorState.transactionFilter.of((transaction) => {
-    if (!transaction.docChanged || !transaction.isUserEvent("input")) return transaction;
+    if (
+      !transaction.docChanged ||
+      !transaction.isUserEvent("input") ||
+      transaction.isUserEvent("input.type.compose")
+    )
+      return transaction;
     const changed: { from: number; to: number }[] = [];
     transaction.changes.iterChanges((_from, _to, from, to) => changed.push({ from, to }));
     const edits = canonicalWikiEdits({
