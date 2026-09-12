@@ -17,6 +17,7 @@ const harness = vi.hoisted(() => {
 
 const autosaves = vi.hoisted(() => ({
   edits: [] as { readonly content: string; readonly snapshot: FileSnapshot }[],
+  flushes: [] as { readonly content: string; readonly snapshot: FileSnapshot }[],
 }));
 
 class FakeEditor implements NoteEditor {
@@ -27,6 +28,9 @@ class FakeEditor implements NoteEditor {
     this.readonly = options.readonly;
   }
   setDocument(content: string, _path: string): void {
+    this.content = content;
+  }
+  syncContent(content: string): void {
     this.content = content;
   }
   setMode(): void {}
@@ -61,16 +65,23 @@ vi.mock("../src/storage/autosave", () => ({
   createAutosave: (options: {
     readonly snapshot: FileSnapshot;
     readonly onStatus: (status: { readonly kind: "saved" }) => void;
-  }) => ({
-    edit: (content: string) => autosaves.edits.push({ content, snapshot: options.snapshot }),
-    flush: async () => {
-      options.onStatus({ kind: "saved" });
-      return true;
-    },
-    getContent: () => "",
-    getSnapshot: () => ({ content: "", fingerprint: "" }),
-    dispose: () => undefined,
-  }),
+  }) => {
+    let current = options.snapshot.content;
+    return {
+      edit: (content: string) => {
+        current = content;
+        autosaves.edits.push({ content, snapshot: options.snapshot });
+      },
+      flush: async () => {
+        autosaves.flushes.push({ content: current, snapshot: options.snapshot });
+        options.onStatus({ kind: "saved" });
+        return true;
+      },
+      getContent: () => "",
+      getSnapshot: () => ({ content: "", fingerprint: "" }),
+      dispose: () => undefined,
+    };
+  },
 }));
 
 const journal = vi.hoisted(() => ({
@@ -167,6 +178,7 @@ describe("Sessions async safety", () => {
     harness.dialogs.length = 0;
     harness.bodies.length = 0;
     autosaves.edits.length = 0;
+    autosaves.flushes.length = 0;
     vi.clearAllMocks();
   });
 
@@ -245,8 +257,16 @@ describe("Sessions async safety", () => {
       ?.click();
     await expect(opening).resolves.toBe(true);
     expect(sessions.current()?.recovery).toEqual(draft);
+    expect(autosaves.edits).toContainEqual({
+      content: "recovered draft",
+      snapshot: snapshot("disk base"),
+    });
 
     await expect(sessions.flush()).resolves.toBe(true);
+    expect(autosaves.flushes).toContainEqual({
+      content: "recovered draft",
+      snapshot: snapshot("disk base"),
+    });
     await vi.waitFor(() => expect(journal.discardSpecificDraft).toHaveBeenCalledWith(draft));
   });
 

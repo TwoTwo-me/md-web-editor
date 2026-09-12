@@ -6,6 +6,82 @@ import { describe, expect, it } from "vitest";
 import { createEditor } from "../src/editor/editor";
 
 describe("CodeMirror editor modes", () => {
+  it("mirrors content without a save callback or a history reset", () => {
+    const parent = document.createElement("main");
+    const changes: string[] = [];
+    const editor = createEditor({
+      parent,
+      content: "base",
+      readonly: false,
+      mode: "source",
+      path: "note.md",
+      onChange: (content) => changes.push(content),
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    const surface = parent.querySelector<HTMLElement>(".cm-editor");
+    const view = surface ? EditorView.findFromDOM(surface) : null;
+    if (!view) throw new Error("Expected CodeMirror editor");
+    view.dispatch({
+      changes: { from: 4, insert: "A" },
+      annotations: Transaction.userEvent.of("input.type"),
+    });
+    editor.syncContent("ZbaseA");
+    expect(changes).toEqual(["baseA"]);
+    editor.undo();
+
+    expect(changes).toEqual(["baseA", "Zbase"]);
+    expect(editor.getContent()).toBe("Zbase");
+    editor.destroy();
+  });
+
+  it("keeps earlier mirrored text when undoing a local view edit", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "base",
+      readonly: false,
+      mode: "source",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    const surface = parent.querySelector<HTMLElement>(".cm-editor");
+    const view = surface ? EditorView.findFromDOM(surface) : null;
+    if (!view) throw new Error("Expected CodeMirror editor");
+    editor.syncContent("Zbase");
+    view.dispatch({
+      changes: { from: 5, insert: "B" },
+      annotations: Transaction.userEvent.of("input.type"),
+    });
+    editor.undo();
+
+    expect(editor.getContent()).toBe("Zbase");
+    editor.destroy();
+  });
+
+  it("refreshes a reading view when another pane mirrors content", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "# Before",
+      readonly: false,
+      mode: "reading",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    editor.syncContent("# After");
+
+    expect(parent.querySelector(".markdown-reading")?.textContent).toContain("After");
+    editor.destroy();
+  });
+
   it("preserves source, exposes source affordances, and does not save document replacement", () => {
     const parent = document.createElement("main");
     const changes: string[] = [];

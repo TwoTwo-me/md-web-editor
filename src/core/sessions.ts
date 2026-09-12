@@ -1,257 +1,285 @@
-import { createEditor } from "../editor/editor";
-import { resolveLink } from "../editor/markdown";
-import { type Autosave, createAutosave, type SaveStatus } from "../storage/autosave";
-import { type Draft, discardDraft, discardSpecificDraft, readDraft } from "../storage/journal";
-import { element } from "../ui/dom";
-import { getPreferences } from "../ui/theme";
-import { discardSavedRecovery, offerRecovery } from "./session-recovery";
+import { type LoadedDocument, loadDocument } from "./session-load";
+import type { Session, SessionOptions } from "./session-model";
+import { SessionPersistence } from "./session-persistence";
 import { showSaveDialog } from "./session-save-dialog";
-import type { EditorMode, FileSnapshot, NoteEditor, NoteLink, Vault } from "./types";
-export type Session = {
-  readonly path: string;
-  readonly editor: NoteEditor;
-  readonly host: HTMLElement;
-  save: Autosave | undefined;
-  status: SaveStatus;
-  snapshot: FileSnapshot;
-  revision: number;
-  recovery: Draft | undefined;
-};
-export type SessionOptions = {
-  readonly vault: Vault;
-  readonly parent: HTMLElement;
-  readonly onChange: (path: string, content: string) => void;
-  readonly onStatus: () => void;
-  readonly onLink: (target: string, kind?: NoteLink["kind"]) => void;
-};
+import { changedSince, flushSessions, hasPending, revisionsOf } from "./session-state";
+import { createSessionView, destroySessionView, type SessionView } from "./session-view";
+import type { EditorMode, NoteLink } from "./types";
+
+export type { Session, SessionOptions } from "./session-model";
+export type { SessionView } from "./session-view";
+
+export class SessionDestroyedError extends Error {}
+class SessionCloseError extends Error {}
+
 export class Sessions {
   readonly items = new Map<string, Session>();
+  readonly views = new Map<string, SessionView>();
   active = "";
+  activeView = "";
   mode: EditorMode = "live";
-  private generation = 0;
+  private readonly loads = new Map<string, Promise<LoadedDocument | undefined>>();
+  private legacyGeneration = 0;
   private holds = 0;
-  constructor(readonly options: SessionOptions) {}
-  current() {
+  private destroyed = false;
+  private readonly persistence: SessionPersistence;
+
+  constructor(readonly options: SessionOptions) {
+    this.persistence = new SessionPersistence({
+      options,
+      items: this.items,
+      views: this.views,
+      hold: () => this.hold(),
+    });
+  }
+
+  current(): Session | undefined {
     return this.items.get(this.active);
   }
+
   revisions(): ReadonlyMap<string, number> {
-    return new Map([...this.items].map(([path, session]) => [path, session.revision]));
+    return revisionsOf(this.items);
   }
+
   changedSince(revisions: ReadonlyMap<string, number>): boolean {
-    return [...this.items].some(([path, session]) => revisions.get(path) !== session.revision);
+    return changedSince(this.items, revisions);
   }
+
   hold(): () => void {
     this.holds += 1;
-    for (const session of this.items.values()) session.editor.setReadonly(true);
+    this.setViewsReadonly(true);
     let released = false;
     return () => {
       if (released) return;
       released = true;
       this.holds -= 1;
-      if (this.holds === 0)
-        for (const session of this.items.values())
-          session.editor.setReadonly(this.options.vault.kind === "readonly");
+      if (this.holds === 0) this.setViewsReadonly(this.options.vault.kind === "readonly");
     };
   }
-  async open(path: string): Promise<boolean> {
-    const token = ++this.generation;
-    if (!(await this.flush())) return false;
+
+  async ensureView(path: string, id: string): Promise<SessionView> {
+    this.assertAlive();
+    const existing = this.views.get(id);
+    if (existing?.path === path) return existing;
+    if (existing && !(await this.closeView(id))) throw new SessionCloseError(id);
     let session = this.items.get(path);
     if (!session) {
-      const snapshot = await this.options.vault.read(path);
-      if (token !== this.generation) return false;
-      let content = snapshot.content;
-      let needsRecoveryReview = false;
-      let recovery: Draft | undefined;
-      const draft = await readDraft(this.options.vault.id, path);
-      if (token !== this.generation) return false;
-      if (draft && draft.content !== content && this.options.vault.kind !== "readonly") {
-        const recovered = await offerRecovery(
-          path,
-          draft.content,
-          snapshot.content,
-          draft.baseFingerprint !== snapshot.fingerprint,
-        );
-        if (token !== this.generation) return false;
-        if (recovered === "recover") {
-          content = draft.content;
-          recovery = draft;
-          needsRecoveryReview = draft.baseFingerprint !== snapshot.fingerprint;
-        } else if (recovered === "disk") await discardSpecificDraft(draft);
-      }
-      const host = element("div", "document-host");
-      this.options.parent.append(host);
-      const editor = createEditor({
-        parent: host,
-        content,
-        path,
-        readonly: this.options.vault.kind === "readonly" || this.holds > 0,
-        mode: this.mode,
-        onChange: (value) => {
-          const s = this.items.get(path);
-          if (!s) return;
-          s.revision += 1;
-          s.save?.edit(value);
-          this.options.onChange(path, value);
-        },
-        onLink: this.options.onLink,
-        completions: () => {
-          const allFiles = getPreferences().linkAllFiles;
-          return this.options.vault.entries
-            .filter((entry) => entry.kind === "note" || allFiles)
-            .map((entry) => entry.path);
-        },
-        asset: async (target) => {
-          const r = resolveLink(
-            path,
-            target,
-            this.options.vault.entries.map((e) => e.path),
-            "embed",
-          );
-          return r.kind === "note" ? this.options.vault.asset(r.path) : undefined;
-        },
-      });
-      session = {
-        path,
-        host,
-        editor,
-        save: undefined,
-        status: needsRecoveryReview
-          ? {
-              kind: "conflict",
-              message: "디스크 파일이 변경되었습니다. 복구본과 디스크 버전을 검토하세요.",
-              current: snapshot,
-            }
-          : { kind: "saved" },
-        snapshot,
-        revision: 0,
-        recovery,
-      };
-      this.items.set(path, session);
-      const saveSnapshot =
-        needsRecoveryReview && draft
-          ? { content: snapshot.content, fingerprint: draft.baseFingerprint }
-          : snapshot;
-      this.attachSave(session, saveSnapshot);
-      if (content !== snapshot.content) {
-        session.revision += 1;
-        session.save?.edit(content);
-        this.options.onChange(path, content);
-        if (needsRecoveryReview) {
-          session.status = {
-            kind: "conflict",
-            message: "디스크 파일이 변경되었습니다. 복구본과 디스크 버전을 검토하세요.",
-            current: snapshot,
-          };
-          this.options.onStatus();
-        }
-      }
+      const loaded = await this.load(path);
+      this.assertAlive();
+      session = this.items.get(path) ?? this.createSession(path, id, loaded);
+      if (this.views.has(id)) return this.view(id);
     }
-    if (token !== this.generation) return false;
-    for (const s of this.items.values()) s.host.hidden = s.path !== path;
-    this.active = path;
-    session.editor.setMode(this.mode);
-    session.editor.focus();
+    return this.addView(session, id);
+  }
+
+  activateView(id: string): boolean {
+    const view = this.views.get(id);
+    if (!view) return false;
+    const session = this.items.get(view.path);
+    if (!session) return false;
+    session.editor = view.editor;
+    session.host = view.host;
+    this.active = view.path;
+    this.activeView = id;
+    this.mode = view.mode;
     return true;
   }
-  private attachSave(session: Session, snapshot: FileSnapshot) {
-    const vault = this.options.vault;
-    if (vault.kind === "readonly") return;
-    session.save = createAutosave({
-      vault,
-      path: session.path,
-      snapshot,
-      onStatus: (status) => {
-        session.status = status;
-        if (status.kind === "saved") void discardSavedRecovery(session).catch(() => undefined);
-        this.options.onStatus();
-      },
-    });
+
+  async closeView(id: string): Promise<boolean> {
+    const view = this.views.get(id);
+    if (!view) return true;
+    const session = this.items.get(view.path);
+    if (!session) return true;
+    const related = this.viewsFor(session.path);
+    if (related.length === 1) return this.close(session.path);
+    const wasActive = this.activeView === id;
+    this.removeView(view);
+    if (session.editor === view.editor)
+      this.useRepresentative(
+        session,
+        related.find((x) => x.id !== id),
+      );
+    if (wasActive) this.activateView(this.viewAfterClose(related, id).id);
+    return true;
   }
-  async flush(): Promise<boolean> {
-    let saved = true;
-    for (const s of this.items.values()) {
-      if (s.save) {
-        if (!(await s.save.flush())) saved = false;
-      } else if (s.status.kind !== "saved") saved = false;
+
+  async open(path: string): Promise<boolean> {
+    const token = ++this.legacyGeneration;
+    if (!(await this.flush()) || token !== this.legacyGeneration) return false;
+    const id = `legacy:${path}`;
+    const view = await this.ensureView(path, id);
+    if (token !== this.legacyGeneration) {
+      await this.closeView(id);
+      return false;
     }
-    return saved;
+    this.activateView(id);
+    for (const candidate of this.views.values()) candidate.host.hidden = candidate.id !== id;
+    view.editor.focus();
+    return true;
   }
+
+  async flush(): Promise<boolean> {
+    return flushSessions(this.items);
+  }
+
   async close(path: string): Promise<boolean> {
-    const s = this.items.get(path);
-    if (!s) return true;
-    if (!s.save && s.status.kind !== "saved") return false;
-    if (s.save && !(await s.save.flush())) return false;
-    s.save?.dispose();
-    s.editor.destroy();
-    s.host.remove();
+    const session = this.items.get(path);
+    if (!session) return true;
+    if (!session.save && session.status.kind !== "saved") return false;
+    if (session.save && !(await session.save.flush())) return false;
+    for (const view of this.viewsFor(path)) this.removeView(view);
+    session.save?.dispose();
     this.items.delete(path);
     if (this.active === path) this.active = "";
     return true;
   }
-  setMode(mode: EditorMode) {
+
+  setMode(mode: EditorMode): void {
+    const view = this.views.get(this.activeView);
+    if (!view) return;
+    view.mode = mode;
+    view.editor.setMode(mode);
     this.mode = mode;
-    this.current()?.editor.setMode(mode);
   }
-  pending() {
-    return [...this.items.values()].some((s) => s.status.kind !== "saved");
+
+  pending(): boolean {
+    return hasPending(this.items);
   }
-  async reload(path: string) {
-    const s = this.items.get(path);
-    if (!s) return;
-    const revision = s.revision;
-    const snapshot = await this.options.vault.read(path);
-    if (this.items.get(path) !== s || s.revision !== revision) return false;
-    s.save?.dispose();
-    s.editor.setDocument(snapshot.content, path);
-    s.snapshot = snapshot;
-    s.status = { kind: "saved" };
-    this.attachSave(s, snapshot);
-    if (s.recovery) await discardSpecificDraft(s.recovery);
-    else await discardDraft(this.options.vault.id, path);
-    s.recovery = undefined;
-    this.options.onChange(path, snapshot.content);
-    this.options.onStatus();
-    return true;
+
+  async reload(path: string): Promise<boolean | undefined> {
+    return this.persistence.reload(path);
   }
+
   async acceptLocal(session: Session): Promise<boolean> {
-    const vault = this.options.vault;
-    if (vault.kind === "readonly") return false;
-    const release = this.hold();
-    try {
-      const fresh = await vault.read(session.path);
-      const current = session.editor.getContent();
-      session.save?.dispose();
-      session.snapshot = fresh;
-      session.status = { kind: "saved" };
-      this.attachSave(session, fresh);
-      session.revision += 1;
-      session.save?.edit(current);
-      if (!(await session.save?.flush())) return false;
-      if (session.recovery) await discardSpecificDraft(session.recovery);
-      session.recovery = undefined;
-      return true;
-    } finally {
-      release();
-    }
+    return this.persistence.acceptLocal(session);
   }
-  saveDialog() {
-    const s =
+
+  saveDialog(): void {
+    const session =
       [...this.items.values()].find(
         (x) => x.status.kind === "conflict" || x.status.kind === "error",
       ) ?? this.current();
-    showSaveDialog(s, {
+    showSaveDialog(session, {
       reload: (path) => this.reload(path),
-      acceptLocal: (session) => this.acceptLocal(session),
+      acceptLocal: (x) => this.acceptLocal(x),
     });
   }
-  destroy() {
-    this.generation++;
-    for (const s of this.items.values()) {
-      s.save?.dispose();
-      s.editor.destroy();
-      s.host.remove();
-    }
+
+  destroy(): void {
+    this.destroyed = true;
+    this.legacyGeneration += 1;
+    for (const view of [...this.views.values()]) this.removeView(view);
+    for (const session of this.items.values()) session.save?.dispose();
     this.items.clear();
+    this.loads.clear();
+    this.active = "";
+    this.activeView = "";
+  }
+
+  private async load(path: string): Promise<LoadedDocument> {
+    const pending = this.loads.get(path);
+    if (pending) return this.requireLoaded(await pending);
+    const task = loadDocument({ vault: this.options.vault, path, isAlive: () => !this.destroyed });
+    this.loads.set(path, task);
+    void task.then(
+      () => this.clearLoad(path, task),
+      () => this.clearLoad(path, task),
+    );
+    return this.requireLoaded(await task);
+  }
+
+  private createSession(path: string, id: string, loaded: LoadedDocument): Session {
+    const view = this.makeView(path, id, loaded.content);
+    const session: Session = {
+      path,
+      editor: view.editor,
+      host: view.host,
+      save: undefined,
+      status: loaded.status,
+      snapshot: loaded.snapshot,
+      revision: 0,
+      recovery: loaded.recovery,
+      content: loaded.snapshot.content,
+    };
+    this.items.set(path, session);
+    this.persistence.attach(session, loaded.saveSnapshot);
+    if (loaded.content !== loaded.snapshot.content) this.persistence.change(id, loaded.content);
+    if (loaded.status.kind === "conflict") this.options.onStatus();
+    return session;
+  }
+
+  private addView(session: Session, id: string): SessionView {
+    return this.makeView(session.path, id, session.content);
+  }
+
+  private makeView(path: string, id: string, content: string): SessionView {
+    const view = createSessionView({
+      id,
+      path,
+      parent: this.options.parent,
+      content,
+      mode: this.mode,
+      readonly: this.holds > 0 || this.options.vault.kind === "readonly",
+      vault: this.options.vault,
+      onChange: (viewId, value) => this.persistence.change(viewId, value),
+      onLink: (viewId, target, kind) => this.followLink(viewId, target, kind),
+      onFocus: (viewId) => this.focused(viewId),
+    });
+    this.views.set(id, view);
+    return view;
+  }
+
+  private focused(id: string): void {
+    if (this.activateView(id)) this.options.onFocus?.(id);
+  }
+
+  private followLink(id: string, target: string, kind?: NoteLink["kind"]): void {
+    if (this.activateView(id)) this.options.onFocus?.(id);
+    this.options.onLink(target, kind);
+  }
+
+  private removeView(view: SessionView): void {
+    this.views.delete(view.id);
+    destroySessionView(view);
+    if (this.activeView === view.id) this.activeView = "";
+  }
+
+  private viewsFor(path: string): SessionView[] {
+    return [...this.views.values()].filter((view) => view.path === path);
+  }
+
+  private useRepresentative(session: Session, view: SessionView | undefined): void {
+    if (!view) return;
+    session.editor = view.editor;
+    session.host = view.host;
+  }
+
+  private viewAfterClose(views: readonly SessionView[], id: string): SessionView {
+    const view = views.find((candidate) => candidate.id !== id);
+    if (!view) throw new SessionCloseError(id);
+    return view;
+  }
+
+  private view(id: string): SessionView {
+    const view = this.views.get(id);
+    if (!view) throw new SessionDestroyedError();
+    return view;
+  }
+
+  private clearLoad(path: string, task: Promise<LoadedDocument | undefined>): void {
+    if (this.loads.get(path) === task) this.loads.delete(path);
+  }
+
+  private requireLoaded(loaded: LoadedDocument | undefined): LoadedDocument {
+    if (!loaded) throw new SessionDestroyedError();
+    return loaded;
+  }
+
+  private assertAlive(): void {
+    if (this.destroyed) throw new SessionDestroyedError();
+  }
+
+  private setViewsReadonly(value: boolean): void {
+    for (const view of this.views.values()) view.editor.setReadonly(value);
   }
 }

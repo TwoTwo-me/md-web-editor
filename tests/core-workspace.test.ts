@@ -5,6 +5,7 @@ import type { FileSnapshot, NoteEditor, VaultEntry, WritableVault } from "../src
 vi.mock("../src/editor/editor", () => ({
   createEditor: (): NoteEditor => ({
     setDocument: () => undefined,
+    syncContent: () => undefined,
     setMode: () => undefined,
     setReadonly: () => undefined,
     getContent: () => "",

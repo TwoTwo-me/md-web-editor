@@ -73,6 +73,7 @@ export type EditorOptions = {
 };
 export interface NoteEditor {
   setDocument(content: string, path: string): void;
+  syncContent(content: string): void;
   setMode(mode: EditorMode): void;
   setReadonly(value: boolean): void;
   getContent(): string;
