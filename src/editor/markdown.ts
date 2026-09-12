@@ -3,6 +3,8 @@ import MarkdownIt from "markdown-it";
 import footnote from "markdown-it-footnote";
 import type { DocumentIndex, NoteLink, ResolvedLink } from "../core/types";
 
+export { canonicalWikiLink, canonicalWikiLinkContent } from "./wiki-links";
+
 type Heading = DocumentIndex["headings"][number];
 const md = new MarkdownIt({ html: true, linkify: false, typographer: false });
 
@@ -85,7 +87,9 @@ function slug(text: string, counts: Map<string, number>): string {
 export function wikiParts(value: string): { readonly target: string; readonly label: string } {
   const [rawTarget = "", rawLabel] = value.split("|", 2);
   const target = rawTarget.trim();
-  return { target, label: rawLabel?.trim() || target.replace(/^.*\//u, "").replace(/#.*/u, "") };
+  const path = target.split("#", 1)[0] ?? "";
+  const fallback = decoded(path)?.replace(/^.*\//u, "") ?? path.replace(/^.*\//u, "");
+  return { target, label: rawLabel?.trim() || fallback };
 }
 
 function addWikis(text: string, links: NoteLink[]): void {
@@ -190,6 +194,10 @@ function candidates(path: string, paths: readonly string[]): readonly string[] {
   );
 }
 
+function missingPath(path: string): string {
+  return /\.[^/]+$/u.test(path) ? path : `${path}.md`;
+}
+
 function external(target: string): ResolvedLink | undefined {
   if (/^(https?|mailto):/iu.test(target)) {
     try {
@@ -209,15 +217,23 @@ export function resolveLink(
   kind: NoteLink["kind"] = "wiki",
 ): ResolvedLink {
   if (/^(?:\/\/|[a-z][a-z\d+.-]*:)/iu.test(target)) return external(target) ?? { kind: "blocked" };
-  const decodedTarget = decoded(target);
-  if (decodedTarget === undefined) return { kind: "blocked" };
-  if (/^(?:\/\/|[a-z][a-z\d+.-]*:)/iu.test(decodedTarget))
-    return external(decodedTarget) ?? { kind: "blocked" };
-  const parts = splitTarget(decodedTarget);
-  if (!parts.path) return { kind: "note", path: source, anchor: parts.anchor };
-  const relative = safePath(`${directory(source)}${parts.path}`);
+  const rawParts = splitTarget(target);
+  const path = decoded(rawParts.path);
+  const anchor = decoded(rawParts.anchor);
+  if (path === undefined || anchor === undefined) return { kind: "blocked" };
+  if (/^(?:\/\/|[a-z][a-z\d+.-]*:)/iu.test(path)) return external(path) ?? { kind: "blocked" };
+  if (!path) return { kind: "note", path: source, anchor };
+  const rootExplicit = path.startsWith("/");
+  const direct = safePath(path);
+  if (rootExplicit) {
+    if (direct === undefined) return { kind: "blocked" };
+    const matches = direct ? candidates(direct, paths) : [];
+    if (matches.length === 1 && matches[0]) return { kind: "note", path: matches[0], anchor };
+    if (matches.length > 1) return { kind: "ambiguous", paths: matches };
+    return { kind: "missing", path: missingPath(direct), anchor };
+  }
+  const relative = safePath(`${directory(source)}${path}`);
   if (relative === undefined) return { kind: "blocked" };
-  const direct = safePath(parts.path);
   const directMatches = direct ? candidates(direct, paths) : [];
   const relativeMatches = candidates(relative, paths);
   const matches =
@@ -228,18 +244,15 @@ export function resolveLink(
       : relativeMatches.length
         ? relativeMatches
         : directMatches;
-  if (matches.length === 1 && matches[0])
-    return { kind: "note", path: matches[0], anchor: parts.anchor };
+  if (matches.length === 1 && matches[0]) return { kind: "note", path: matches[0], anchor };
   if (matches.length > 1) return { kind: "ambiguous", paths: matches };
   const basename = (direct ?? relative).replace(/^.*\//u, "").replace(/\.(md|markdown)$/iu, "");
   const names = paths.filter(
     (entry) => entry.replace(/^.*\//u, "").replace(/\.(md|markdown)$/iu, "") === basename,
   );
-  if (names.length === 1 && names[0]) return { kind: "note", path: names[0], anchor: parts.anchor };
+  if (names.length === 1 && names[0]) return { kind: "note", path: names[0], anchor };
   if (names.length > 1) return { kind: "ambiguous", paths: names };
-  const missing =
-    relative.endsWith(".md") || relative.endsWith(".markdown") ? relative : `${relative}.md`;
-  return { kind: "missing", path: missing, anchor: parts.anchor };
+  return { kind: "missing", path: missingPath(relative), anchor };
 }
 
 export { renderMarkdown } from "./render";

@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+
+import { Transaction } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
 import { createEditor } from "../src/editor/editor";
 
@@ -41,6 +44,123 @@ describe("CodeMirror editor modes", () => {
     });
     editor.format("link");
     expect(editor.getContent()).toBe("[[]]");
+    editor.destroy();
+  });
+
+  it("formats a selected known file as the canonical root-explicit wiki link", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "설명서",
+      readonly: false,
+      mode: "source",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => ["자료/설명서.pdf"],
+    });
+    const surface = parent.querySelector<HTMLElement>(".cm-editor");
+    const view = surface ? EditorView.findFromDOM(surface) : null;
+    if (!view) throw new Error("Expected CodeMirror editor");
+    view.dispatch({ selection: { anchor: 0, head: "설명서".length } });
+    editor.format("link");
+    expect(editor.getContent()).toBe("[[/자료/설명서.pdf|설명서]]");
+    editor.destroy();
+  });
+
+  it("canonicalizes a newly typed resolvable wiki link without changing untouched links", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "[[unchanged]]\n\n",
+      readonly: false,
+      mode: "source",
+      path: "notes/current.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => ["자료/설명서.pdf"],
+    });
+    const surface = parent.querySelector<HTMLElement>(".cm-editor");
+    const view = surface ? EditorView.findFromDOM(surface) : null;
+    if (!view) throw new Error("Expected CodeMirror editor");
+    const position = editor.getContent().length;
+    view.dispatch({
+      changes: { from: position, insert: "[[설명서]]" },
+      annotations: Transaction.userEvent.of("input.type"),
+    });
+    expect(editor.getContent()).toBe("[[unchanged]]\n\n[[/자료/설명서.pdf|설명서]]");
+    editor.destroy();
+  });
+
+  it("leaves ambiguous and fenced-code wiki text unchanged after input", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "```md\n",
+      readonly: false,
+      mode: "source",
+      path: "notes/current.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => ["a/report.md", "b/report.md"],
+    });
+    const surface = parent.querySelector<HTMLElement>(".cm-editor");
+    const view = surface ? EditorView.findFromDOM(surface) : null;
+    if (!view) throw new Error("Expected CodeMirror editor");
+    view.dispatch({
+      changes: {
+        from: editor.getContent().length,
+        insert: "[[report]]\n```\n\n`[[report]]`\n\n[[report]]",
+      },
+      annotations: Transaction.userEvent.of("input.paste"),
+    });
+    expect(editor.getContent()).toBe("```md\n[[report]]\n```\n\n`[[report]]`\n\n[[report]]");
+    editor.destroy();
+  });
+
+  it("writes a newly typed unknown wiki target as a root Markdown path", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "",
+      readonly: false,
+      mode: "source",
+      path: "notes/current.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    const surface = parent.querySelector<HTMLElement>(".cm-editor");
+    const view = surface ? EditorView.findFromDOM(surface) : null;
+    if (!view) throw new Error("Expected CodeMirror editor");
+    view.dispatch({
+      changes: { from: 0, insert: "[[draft]]" },
+      annotations: Transaction.userEvent.of("input.type"),
+    });
+    expect(editor.getContent()).toBe("[[/draft.md|draft]]");
+    editor.destroy();
+  });
+
+  it("renders a delimiter-containing filename through its decoded fallback label", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "[[/report%5Bfinal%5D.txt]]",
+      readonly: false,
+      mode: "reading",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => ["report[final].txt"],
+    });
+    expect(
+      parent.querySelector<HTMLElement>("[data-md-href='/report%5Bfinal%5D.txt']")?.textContent,
+    ).toBe("report[final].txt");
     editor.destroy();
   });
 

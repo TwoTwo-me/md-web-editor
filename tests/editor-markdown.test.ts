@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { indexDocument, markdownContext, resolveLink } from "../src/editor/markdown";
+import {
+  canonicalWikiLink,
+  indexDocument,
+  markdownContext,
+  resolveLink,
+} from "../src/editor/markdown";
 
 describe("Markdown document indexing", () => {
   it("indexes supported links and headings while excluding fenced code", () => {
@@ -52,6 +57,49 @@ describe("vault link resolution", () => {
       kind: "external",
       url: "https://tracker.invalid/",
     });
+  });
+
+  it("resolves root-explicit wiki and Markdown targets only from the vault root", () => {
+    const paths = ["folder/current.md", "folder/guide.md", "manual.md"];
+    expect(resolveLink("folder/current.md", "/manual.md", paths, "wiki")).toEqual({
+      kind: "note",
+      path: "manual.md",
+      anchor: "",
+    });
+    expect(resolveLink("folder/current.md", "/manual.md", paths, "markdown")).toEqual({
+      kind: "note",
+      path: "manual.md",
+      anchor: "",
+    });
+    expect(resolveLink("folder/current.md", "/guide", paths, "wiki")).toEqual({
+      kind: "missing",
+      path: "guide.md",
+      anchor: "",
+    });
+    expect(resolveLink("folder/current.md", "/docs/report.pdf", paths, "wiki")).toEqual({
+      kind: "missing",
+      path: "docs/report.pdf",
+      anchor: "",
+    });
+  });
+
+  it("keeps encoded filename punctuation in the path instead of treating it as an anchor", () => {
+    const paths = ["folder/current.md", "folder/a#b%.md"];
+    expect(resolveLink("folder/current.md", "/folder/a%23b%25.md#details", paths)).toEqual({
+      kind: "note",
+      path: "folder/a#b%.md",
+      anchor: "details",
+    });
+  });
+
+  it("writes canonical root-explicit wiki links with readable aliases", () => {
+    expect(canonicalWikiLink("자료/설명서.pdf")).toBe("[[/자료/설명서.pdf|설명서]]");
+    expect(canonicalWikiLink("folder/a#b%.md")).toBe("[[/folder/a%23b%25.md|a#b%]]");
+    const bracketed = canonicalWikiLink("report[final].txt");
+    expect(bracketed).toBe("[[/report%5Bfinal%5D.txt]]");
+    expect(indexDocument(bracketed).links).toEqual([
+      { target: "/report%5Bfinal%5D.txt", label: "report[final].txt", kind: "wiki" },
+    ]);
   });
 });
 

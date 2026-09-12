@@ -8,6 +8,8 @@ import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import type { EditorMode, EditorOptions, NoteEditor } from "../core/types";
 import { livePreview } from "./live";
 import { indexDocument, renderMarkdown } from "./markdown";
+import { canonicalWikiEdits, resolvedWikiLinkContent } from "./wiki-edits";
+import { canonicalWikiLinkContent } from "./wiki-links";
 import "../styles/editor.css";
 
 const modeCompartment = new Compartment();
@@ -21,16 +23,36 @@ function wikiCompletion(options: EditorOptions) {
     if (!match) return null;
     return {
       from: context.pos - (match[1]?.length ?? 0),
-      options: options
-        .completions()
-        .map((path) => ({ label: path, type: "file", apply: `${path}]]` })),
+      options: options.completions().map((path) => ({
+        label: path,
+        type: "file",
+        apply: `${canonicalWikiLinkContent(path)}]]`,
+      })),
     };
   };
 }
 
-function replacement(view: EditorView, before: string, after: string): void {
+function wikiCanonicalization(
+  path: () => string,
+  completions: () => readonly string[],
+): ReturnType<typeof EditorState.transactionFilter.of> {
+  return EditorState.transactionFilter.of((transaction) => {
+    if (!transaction.docChanged || !transaction.isUserEvent("input")) return transaction;
+    const changed: { from: number; to: number }[] = [];
+    transaction.changes.iterChanges((_from, _to, from, to) => changed.push({ from, to }));
+    const edits = canonicalWikiEdits({
+      content: transaction.newDoc.toString(),
+      source: path(),
+      paths: completions(),
+      changed,
+    });
+    return edits.length ? [transaction, { changes: edits, sequential: true }] : transaction;
+  });
+}
+
+function replacement(view: EditorView, before: string, after: string, content?: string): void {
   const selection = view.state.selection.main;
-  const selected = view.state.sliceDoc(selection.from, selection.to);
+  const selected = content ?? view.state.sliceDoc(selection.from, selection.to);
   view.dispatch({
     changes: { from: selection.from, to: selection.to, insert: `${before}${selected}${after}` },
     selection: {
@@ -48,14 +70,22 @@ function prefixLine(view: EditorView, prefix: string): void {
 function format(
   view: EditorView,
   action: Parameters<NoteEditor["format"]>[0],
-  writable: boolean,
+  options: {
+    readonly writable: boolean;
+    readonly source: () => string;
+    readonly completions: () => readonly string[];
+  },
 ): void {
-  if (!writable) return;
+  if (!options.writable) return;
   if (action === "bold") replacement(view, "**", "**");
   else if (action === "italic") replacement(view, "*", "*");
   else if (action === "code") replacement(view, "`", "`");
-  else if (action === "link") replacement(view, "[[", "]]");
-  else if (action === "heading") prefixLine(view, "# ");
+  else if (action === "link") {
+    const selection = view.state.selection.main;
+    const selected = view.state.sliceDoc(selection.from, selection.to);
+    const content = resolvedWikiLinkContent(options.source(), selected, options.completions());
+    replacement(view, "[[", "]]", content ?? selected);
+  } else if (action === "heading") prefixLine(view, "# ");
   else if (action === "task") prefixLine(view, "- [ ] ");
   else prefixLine(view, "> ");
 }
@@ -86,6 +116,7 @@ export function createEditor(options: EditorOptions): NoteEditor {
         EditorView.lineWrapping,
         keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
         autocompletion({ override: [wikiCompletion(options)] }),
+        wikiCanonicalization(() => currentPath, options.completions),
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !replacingDocument)
             options.onChange(update.state.doc.toString());
@@ -201,7 +232,11 @@ export function createEditor(options: EditorOptions): NoteEditor {
       view.focus();
     },
     format(action) {
-      format(view, action, !isReadonly);
+      format(view, action, {
+        writable: !isReadonly,
+        source: () => currentPath,
+        completions: options.completions,
+      });
     },
     undo() {
       if (!isReadonly) undo(view);
