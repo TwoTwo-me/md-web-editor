@@ -5,6 +5,8 @@ Vite + strict TypeScript + vanilla DOM shell minimizes framework/runtime surface
 
 ## Modules
 - `src/core/types.ts`: shared immutable boundary contracts.
+- `src/core/pane-layout*.ts` and `workspace-panes.ts`: bounded recursive tab groups, focused navigation and vault-scoped local layout metadata; UI surface reconciles stable editor/graph hosts across moves.
+- `src/core/sessions.ts` and `session-*.ts`: one canonical document and autosave writer per path, with independently identified editor views and minimal mirrored content changes.
 - `src/storage/`: local directory adapter, read-only import, demo adapter, SHA-256 fingerprint, serialized checked writes, local recovery journal and autosave controller. Files are never fetched via HTTP.
 - `src/editor/`: Markdown parsing/index/link resolution, sanitized rendering, CodeMirror live/source/reading modes. Renderer only returns safe local markup; asset loader receives vault-relative paths and produces allowed raster blobs. Graph and backlinks use the same parser/resolver.
 - `src/graph/`: graph data filters, settings schema, layout and pointer/keyboard interaction. Data IDs stay in memory only. Main application passes current graph and selected path.
@@ -14,6 +16,8 @@ Vite + strict TypeScript + vanilla DOM shell minimizes framework/runtime surface
 
 ## Ownership and concurrency
 A per-origin Web Lock serializes writes across app tabs, fingerprint checks compare current disk bytes to the opened snapshot. Cross-origin/native writers cannot share the lock, so read-before-write is best effort; never promise atomic compare-and-swap against an external editor. Browser stream commit ensures complete-file replacement, failures retain the local buffer. Async responses are tied to vault/file identity; late reads cannot overwrite a newer tab. File switches flush the current draft. Unsaved UI never clears from an older save revision. File rename/deletion is not automatic.
+
+Multiple panels displaying the same note share that writer. Closing one view leaves the document alive; closing its final view drains saving before removal. Pending opens are scoped to each tab group and workspace generation. Split ratios and tree references are validated before restoring metadata. See [ADR 004](decisions/004-split-panels.md).
 
 ## Path/link rules
 Normalize separators, decode URL paths safely, collapse `.`/`..` while refusing vault escape. Markdown relative links resolve from source directory; wiki paths first resolve exact vault path, then sibling and unique basename. Extension `.md` or `.markdown` recognized without case sensitivity. Fragments stay separate and scroll headings/block IDs. Explicit external protocols are intercepted; script/data/file/protocol-relative paths blocked. Reference links are parsed through Markdown tokens; code/raw HTML cannot introduce graph edges. Missing link creation refuses traversal, collisions and invalid OS names.

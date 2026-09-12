@@ -9,6 +9,7 @@
 | Local milestone verification | passed at integration milestone | 42 tests, check/build, native folder autosave/conflict and responsive QA. |
 | GitHub Pages milestones | multiple candidates deployed and tested | Actions 34417660613 published eaeadfa; real-browser build identity and update verified. Earlier public synthetic folder autosave and resource-barrier observations are recorded separately. |
 | All-file links and final release | 0.2.0 deployed and publicly tested | 93 tests, check/build, scoped code review, both visual passes and public native-folder autosave/attachment navigation pass. See the 0.2.0 release record. |
+| Obsidian-style tab groups | 0.3.0 deployed and publicly tested | 137 tests, check/build, scoped code review, 20-frame dual visual approval and public native autosave/layout restoration pass. See the 0.3.0 release record. |
 
 No private reference screenshots or machine-specific paths are tracked. Temporary QA artifacts are ignored.
 
@@ -25,3 +26,5 @@ Latest candidate: `8b8bfae46f858c2315e66f6093662747071bb7b5` deployed by Actions
 2026-09-12 supersedes the earlier owner-decision hold: the user confirmed the GitHub.io deployment. A dedicated hostname is optional additional isolation, and a rewrite of historical author metadata has not been requested. Neither is a prerequisite for this feature release. No published history was rewritten.
 
 0.2.0 completed: storage indexing, root-link serialization and local attachment UI landed in separate commits, followed by a Korean IME normalization fix. Tag `v0.2.0` points to `5b65233b704b1b0bf375089f3db560998862901f`; Actions 34699162177 published it. Public Computer Use opened only a generated folder, observed two-to-seven-file discovery, followed attachment links from notes and the graph, and verified canonical wiki text automatically written to the original disk file. The public console was clean. Full test, review and deployment references are in [the release record](releases/0.2.0.md).
+
+0.3.0 completed: shared document views (`4d6abc1`), recursive layout (`5ed05cf`), graph resize (`c5517c6`) and pane UI integration (`123e649`) landed in separate checked/pushed commits. Review and actual browser usage found invalid restored ratios, nested-divider ownership and doubled source gutter padding; regression coverage and final corrections landed in `7bbb889` and `d1da0ef`. Tag `v0.3.0` points to `d1da0efdb06cc41891b32e51bb42e53cf0c2708a`, published by Actions 34703605991. Independent code/visual reviews and public Computer Use pass. The tested build remains frozen while this documentation receipt is pushed. Details: [0.3.0 release](releases/0.3.0.md).

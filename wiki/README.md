@@ -11,5 +11,7 @@ This is the source-of-truth index. Keep pages small, link decisions to implement
 - [Version and release policy](versioning.md)
 - [Verification](verification.md)
 - [0.2.0 release and acceptance](releases/0.2.0.md)
+- [Split panels and shared documents](decisions/004-split-panels.md)
+- [0.3.0 release and acceptance](releases/0.3.0.md)
 
 All examples and QA notes are synthetic. Source notes stay on the user's device. Git tracks the application and this wiki only.

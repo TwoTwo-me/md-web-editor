@@ -1,6 +1,6 @@
 # ADR 004: Split panels and shared documents
 
-Status: implementation in progress.
+Status: accepted and shipped in [0.3.0](../releases/0.3.0.md).
 
 The original workspace owns one visible editor or graph at a time. Replace this with a recursive split tree whose leaves are ordered tab groups. Note and graph tabs have view identities independent from file paths. Moving a tab changes layout metadata and DOM placement, not the file, editor undo state or graph instance.
 
