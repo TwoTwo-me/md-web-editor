@@ -1,6 +1,6 @@
 # ADR 005: Installed offline application
 
-Status: implementation verified locally; release acceptance pending.
+Status: accepted and shipped in [0.4.0](../releases/0.4.0.md).
 
 Use Chrome's native Progressive Web App installation rather than a separate desktop package. The build emits a manifest with a stable deployment-path `id`, relative `start_url` and `scope`, `standalone` display, Korean description and the existing replaceable boxed `.md` identity. Relative `id` resolves against the origin rather than the manifest directory, so the explicit base path is intentional. No private filenames, machine paths, user IDs or tracking parameters enter application URLs or metadata.
 

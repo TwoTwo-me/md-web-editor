@@ -25,6 +25,8 @@ Normalize separators, decode URL paths safely, collapse `.`/`..` while refusing 
 ## Network barrier
 Build CSP meta occurs before scripts: default-src none; scripts self; inline styles allowed for CodeMirror and graph transforms; connect none; images blob/data only; fonts self; objects/frames/media/forms/base none. Markdown sanitizer also strips all resource-loading HTML attributes, style, SVG, forms, ping and targets. App assets are eagerly bundled; no note-sensitive dynamic URL loading. Service worker caches an explicit app-asset manifest only and never dynamically caches arbitrary requests. No runtime remote calls. Themes are read as local JSON and parse through a fixed schema.
 
+The build emits an installable web-app manifest with an explicit base-path identity and embedded PNG icon bytes. Manifest and static icon sources enter the same app-only precache; the image CSP is unchanged. The installed application and regular browser share the existing local filesystem and offline shell implementation. Installation readiness follows worker state, including failed precaching. See [ADR 005](decisions/005-install-offline.md).
+
 ## Source references
 - [File System Access](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access)
 - [Permission model](https://wicg.github.io/file-system-access/)
