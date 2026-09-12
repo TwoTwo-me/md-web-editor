@@ -17,8 +17,7 @@
 .note-editor .cm-scroller {
   overflow: auto;
 }
-.note-editor .cm-content,
-.note-editor .cm-gutters {
+.note-editor .cm-content {
   padding-top: var(--s8);
   padding-bottom: var(--s12);
 }
